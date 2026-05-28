@@ -3,7 +3,7 @@
 </p>
 <h1 align="center">Hallo</h1>
 <p align="center">
-  <a href="sileo://source/https://2kgt.github.io/repo/">
+  <a href="https://2kgt.github.io/repo/">
     <img src="https://img.shields.io/badge/ADD_TO_SOURCE-848ef9?style=for-the-badge&logo=apple&logoColor=white" alt="Add to Source">
   </a>
 </p>
