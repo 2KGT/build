@@ -1,0 +1,11 @@
+Package: com.kyic.yomost
+Name: Yomost
+Version: 0.0.3
+Architecture: iphoneos-arm
+Description: Một trình tăng cường YouTube
+Maintainer: Kyic
+Author: Kyic
+Section: Tweaks
+Depends: mobilesubstrate (>= 0.9.5000), firmware (>= 14.0)
+Icon: https://raw.githubusercontent.com/dayanch96/icons/main/ytlite.png
+SileoDepiction: https://raw.githubusercontent.com/dayanch96/icons/main/ytlite.json

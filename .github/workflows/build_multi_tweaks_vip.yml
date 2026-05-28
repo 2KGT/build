@@ -1,0 +1,191 @@
+name: "Build Multi Tweaks vip"
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Linh hồn dự án'
+        required: true
+        type: choice
+        default: 'None'
+        options: [ 'None', AutoAC, AutoDL, Facebook, Yomost, YouMod, YTLite ]
+      ver_type:
+        description: 'Cấp độ nâng cấp version'
+        type: choice
+        default: 'Patch (Vá lỗi)'
+        options: [ 'Patch (Vá lỗi)', 'Minor (Tính năng)', 'Major (Đại tu)' ]
+      publish:
+        description: '🆙 Đưa lên sileo (Test-Publish)'
+        type: boolean
+        default: false
+      clean_build:
+        description: '🚮 Dọn sạch cache trước khi build'
+        type: boolean
+        default: true
+      send_deb:
+        description: '🤖 Gửi file qua Telegram'
+        type: boolean
+        default: true
+
+  push:
+    paths:
+      - '**/control'
+
+env:
+  TZ: "Asia/Ho_Chi_Minh"
+  THEOS: ${{ github.workspace }}/theos_engine
+
+jobs:
+  forge:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+
+      # 1. Kiểm tra đầu vào và khởi tạo hệ thống
+      - name: 📥 1.1 Checkout Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🔍 1.2 Phát hiện Dự án thay đổi (Git Push)
+        id: detect_project
+        if: github.event_name == 'push'
+        run: |
+          CHANGED_FILE=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} | grep 'control' | head -n 1)
+          if [ -z "$CHANGED_FILE" ]; then
+            echo "PROJECT_NAME=None" >> $GITHUB_ENV
+          else
+            PROJECT_NAME=$(echo "$CHANGED_FILE" | awk -F'/' '{print $1}')
+            echo "PROJECT_NAME=$PROJECT_NAME" >> $GITHUB_ENV
+          fi
+
+      - name: 🛑 1.3 Kiểm tra Đầu vào Dự án (Gác cổng sớm)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_PROJECT: ${{ github.event.inputs.project }}
+        run: |
+          python3 .github/scripts/check_project.py
+
+
+      - name: 🛠️ 1.4 Cài đặt Hệ thống Theos (Always run)
+        run: |
+          brew update
+          brew install make ldid dpkg
+
+      - name: 🛠️ 1.5 Setup Theos Engine (Cache)
+        id: cache-theos
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.THEOS }}
+          key: theos-engine-${{ runner.os }}
+
+      - name: ⌛️ 1.6 Clone Theos (cache miss)
+        if: steps.cache-theos.outputs.cache-hit != 'true'
+        run: |
+          git clone --recursive https://github.com/theos/theos.git $THEOS
+          curl -L https://github.com/theos/sdks/archive/master.tar.gz | tar -xz --strip-components=1 -C $THEOS/sdks
+
+      # 2. Tự động Biên Dịch (Build Engine)
+      - name: 🚎 2.1 Tự động Biên Dịch (Build Engine)
+        id: python_build
+        run: |
+          export THEOS=${{ env.THEOS }}
+          python3 -u .github/scripts/build_engine.py
+
+      - name: 📝 2.2 Tổng kết & Phân tích lỗi
+        if: always()
+        run: |
+          if [ "${{ steps.python_build.outcome }}" == "success" ]; then
+            echo "## ✅ Build thành công: ${{ steps.python_build.outputs.display_name }}" >> $GITHUB_STEP_SUMMARY
+            echo "Phiên bản: **v${{ steps.python_build.outputs.final_ver }}**" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Build thất bại" >> $GITHUB_STEP_SUMMARY
+            echo "### Phân tích lỗi nhanh:" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            # Tự động trích xuất các dòng lỗi từ log build
+            grep -iE "error|fatal|warning|ld:|make:" .github/scripts/build.log | tail -n 20 >> $GITHUB_STEP_SUMMARY || echo "Không thấy chi tiết lỗi." >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # 3. Lưu trữ Artifacts (để tải về từ GitHub)
+      - name: 📦 3.1 Upload Artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tweak-release-package
+          path: output/
+          if-no-files-found: warn
+
+      # 4. Sync lên Repo Sileo (nếu cần)
+      - name: ♻️ 4.1 Sync & Release
+        if: success() && github.event.inputs.publish == 'true' && steps.python_build.outputs.has_deb == 'true'
+        run: |
+          # 1. Clone repo đích 
+          git clone https://${{ secrets.REPO_TOKEN }}@github.com/2KGT/repo.git public_repo_target
+          
+          shopt -s nullglob
+          
+          # 2. Vòng lặp quét tất cả các file .deb trong thư mục output
+          for file in output/*.deb; do
+            filename=$(basename "$file")
+            
+            # Tách lấy Bundle ID gốc (Xóa phần đuôi từ dấu gạch dưới _ đầu tiên)
+            # Ví dụ: com.apple.tweak_1.0.0_iphoneos-arm.deb -> com.apple.tweak
+            bundle_id=$(echo "$filename" | cut -d'_' -f1)
+            
+            # GIẢI PHÁP 1: Nếu bạn muốn tên thư mục NGẮN GỌN (chỉ lấy phần chữ cuối cùng của Bundle ID)
+            # Ví dụ: com.2kgt.mytweak -> lấy chữ "mytweak" làm tên thư mục
+            tweak_folder=$(echo "$bundle_id" | awk -F'.' '{print $NF}')
+            
+            # GIẢI PHÁP 2 (Nếu muốn giữ nguyên dạng cũ thì đổi tweak_folder=$bundle_id)
+            
+            # ĐƯỜNG DẪN MỚI: public_repo_target/repo/debs/mytweak
+            target_dir="public_repo_target/repo/debs/$tweak_folder"
+            
+            # Tạo thư mục chứa tweak
+            mkdir -p "$target_dir"
+            
+            # Copy file .deb (arm/arm64...) vào thư mục riêng biệt vừa tạo
+            cp "$file" "$target_dir/"
+            echo "✅ Đã copy file deb $filename vào $target_dir"
+            
+            # 3. SỬA LỖI TÌM DYLIB CHO 1 FILE ARM:
+            # Vì chỉ có 1 file arm.deb, ta quét thẳng xem trong output có file .dylib nào không
+            # và copy nó đi cùng với file deb vào thư mục đích.
+            for dylib in output/*.dylib; do
+              if [ -f "$dylib" ]; then
+                cp "$dylib" "$target_dir/"
+                echo "🎯 Đã tìm thấy và gom $(basename "$dylib") vào $target_dir"
+              fi
+            done
+          done
+          
+          # 4. Tiến hành commit và push
+          cd public_repo_target
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+          
+          git add repo/
+          if git diff-index --quiet HEAD --; then
+            echo "ℹ️ Không có thay đổi nào mới để cập nhật."
+          else
+            git commit -m "🚀 [Auto Sync] ${{ steps.python_build.outputs.display_name }} v${{ steps.python_build.outputs.final_ver }}"
+            git push origin main
+          fi
+
+      # 5. Gửi Thông Báo Trạng Thái Luồng Telegram bot
+      - name: 📢 5.1 Gửi Thông Báo Trạng Thái Luồng
+        if: always()
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+          JOB_STATUS: ${{ job.status }}
+          PROJECT_NAME: ${{ github.event.inputs.project || env.PROJECT_NAME || 'Unknown' }}
+        run: |
+          if [ -f "./.github/scripts/tgbot.py" ]; then
+             # Sửa lỗi externally-managed-environment bằng cờ --break-system-packages
+             pip3 install requests --break-system-packages
+             python3 ./.github/scripts/tgbot.py
+          fi

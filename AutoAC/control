@@ -1,0 +1,9 @@
+Package: com.kyic.autoac
+Name: AutoAC
+Version: 1.0
+Architecture: iphoneos-arm64
+Depends: mobilesubstrate
+Description: AutoAC tweak (long press + settings)
+Maintainer: Kyic
+Author: Kyic
+Section: Tweaks

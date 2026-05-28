@@ -1,0 +1,143 @@
+name: Vạn Header Super
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: '🔗 Link IPA Decrypt'
+        required: true
+        type: string
+      app_name:
+        description: '📁 Thư mục lưu (VD: YouTubeHeader)'
+        required: true
+        default: 'YouTubeHeader'
+        type: string
+      target_classes:
+        description: '🎯 Nhặt Class cụ thể (Để trống sẽ hốt TẤT CẢ)'
+        required: false
+        type: string
+      clean_warehouse:
+        description: '🧨 Dọn sạch kho cũ trước khi nhập hàng mới'
+        type: boolean
+        default: false
+      skip_filtering:
+        description: '🛡️ Tắt bộ lọc rác (Giữ lại tất cả file, dù là file rỗng)'
+        type: boolean
+        default: false
+      apply_patch:
+        description: '🩹 Vá lỗi @class (Chống lỗi Forward Declaration)'
+        type: boolean
+        default: true
+
+jobs:
+  dump_process:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 📥 Kết nối kho bãi
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Cài đặt Máy móc (ipsw)
+        run: brew install blacktop/tap/ipsw
+
+      - name: 📦 Tiếp nhận và Giải phẫu IPA
+        run: |
+          curl -L -A "Mozilla/5.0" "${{ github.event.inputs.ipa_url }}" -o app.ipa
+          unzip -q app.ipa -d app_extracted
+
+      - name: ⚡ Vận hành dây chuyền Dump (Bản vá lỗi mất hàng)
+        run: |
+          TARGET_DIR="headers/${{ github.event.inputs.app_name }}"
+          RAW_CACHE="raw_dump_cache"
+          mkdir -p "$TARGET_DIR" "$RAW_CACHE"
+
+          # ... (Đoạn chạy ipsw giữ nguyên) ...
+
+          echo "🚜 Đang quét sâu và hốt hàng từ mọi ngõ ngách..."
+          # Dùng lệnh find để tìm tất cả file .h bất kể nó nằm sâu đến đâu trong cache
+          find "$RAW_CACHE" -type f -name "*.h" -exec cp -f {} "$TARGET_DIR/" \;
+          
+          echo "📊 Kiểm kê nhanh: Kho hiện có $(ls "$TARGET_DIR" | wc -l) linh kiện."
+
+          
+          # 🧨 Xử lý công tắc Dọn kho
+          [ "${{ github.event.inputs.clean_warehouse }}" == "true" ] && rm -rf "$TARGET_DIR"
+          mkdir -p "$TARGET_DIR" "$RAW_CACHE"
+
+          echo "🧬 Đang quét Mach-O và băm nát Binary..."
+          find app_extracted/Payload -type f ! -name "*.*" ! -name "CodeResources" ! -name "PkgInfo" > bin_list.txt
+          
+          while read -r BIN; do
+              if file "$BIN" | grep -q "Mach-O"; then
+                  echo "🏗️ Đang xử lý: $(basename "$BIN")"
+                  # Sử dụng ipsw để trích xuất toàn bộ header
+                  ipsw class-dump "$BIN" --headers -o "$RAW_CACHE" || true
+              fi
+          done < bin_list.txt
+
+          # --- QUY TRÌNH PHÂN PHỐI HÀNG HOÁ ---
+          TARGET_CLASSES="${{ github.event.inputs.target_classes }}"
+          
+          if [ -z "$TARGET_CLASSES" ]; then
+              echo "🚜 Chế độ: DUMP ALL (Hốt trọn ổ)"
+              find "$RAW_CACHE" -name "*.h" -exec cp -f {} "$TARGET_DIR/" \;
+          else
+              echo "🧺 Chế độ: NHẶT TINH NHUỆ (Theo danh sách)"
+              for CLS in $TARGET_CLASSES; do
+                  [ -z "$CLS" ] && continue
+                  # Tìm kiếm không phân biệt hoa thường để tránh sót
+                  find "$RAW_CACHE" -iname "*$CLS*.h" -exec cp -f {} "$TARGET_DIR/" \;
+              done
+          fi
+
+      - name: 🧼 Thanh tẩy kho bãi (Bộ lọc an toàn)
+        if: github.event.inputs.skip_filtering == 'false'
+        run: |
+          TARGET_DIR="headers/${{ github.event.inputs.app_name }}"
+          if [ -d "$TARGET_DIR" ]; then
+            cd "$TARGET_DIR"
+            echo "🧹 Đang lọc bỏ rác thải công nghiệp..."
+            
+            # 1. Chỉ xoá file thực sự rỗng (dưới 30 bytes)
+            find . -name "*.h" -type f -size -30c -delete
+            
+            # 2. Chỉ xoá file rác Swift hệ thống (_Ttc), giữ lại hàng YT/SPT
+            find . -name "_Ttc*" ! -name "*YT*" ! -name "*SPT*" -delete
+            
+            # 3. Xoá file Metadata rác của ipsw
+            rm -f *.metadata.h 2>/dev/null
+            
+            # 4. Giữ lại các Class quan trọng dù tên dài (Không dùng awk length nữa)
+            
+            echo "✅ Thanh lọc xong. Kho hiện có $(ls | wc -l) linh kiện chuẩn."
+            cd - > /dev/null
+          fi
+
+      - name: 🩹 Vá giáp (Patch Forward Declaration)
+        if: github.event.inputs.apply_patch == 'true'
+        run: |
+          TARGET_DIR="headers/${{ github.event.inputs.app_name }}"
+          if [ -d "$TARGET_DIR" ]; then
+            echo "🩹 Đang vá lỗi @class cho linh kiện..."
+            find "$TARGET_DIR" -name "*.h" -exec sed -i '' '1i\
+            @class NSObject, NSString, NSArray, NSDictionary, UIView, UIViewController; \
+            @protocol NSObject, NSCopying, NSCoding;
+            ' {} +
+          fi
+
+      - name: 🚀 Xuất kho về Repo
+        run: |
+          git config --global user.name "GitHub Action"
+          git config --global user.email "action@github.com"
+          git add headers/
+          git commit -m "🚀 Factory Update: ${{ github.event.inputs.app_name }} [v3.0]" || exit 0
+          git push
+      - name: 🧹 Khử trùng Headers (Loại bỏ Include chéo)
+        run: |
+          TARGET_DIR="headers/YouTubeHeader"
+          echo "🧼 Đang quét sạch các lệnh include độc hại..."
+          # Lệnh này sẽ vô hiệu hoá tất cả các dòng #include và #import file nội bộ
+          # Nó chỉ giữ lại các import hệ thống như Foundation, UIKit...
+          find "$TARGET_DIR" -type f -name "*.h" -exec sed -i '' '/#include "/d; /#import "/ { /<.*>/!d; }' {} +
+

@@ -1,0 +1,347 @@
+name: "Build Multi Tweaks final"
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Linh hồn dự án (Nếu chọn None, hệ thống sẽ tự quét danh sách mới)'
+        required: true
+        type: choice
+        default: 'None'
+        options: [ 'None', AutoAC, AutoDL, Facebook, YTLite, Yomost ]
+      ver_type:
+        description: 'Cấp độ nâng cấp'
+        type: choice
+        default: 'Patch (Vá lỗi)'
+        options: [ 'Patch (Vá lỗi)', 'Minor (Tính năng)', 'Major (Đại tu)' ]
+      publish:
+        description: '🆙 Đưa lên sileo (Test-Publish)'
+        type: boolean
+        default: false
+      clean_build:
+        description: '🚮 Dọn sạch cache trước khi build'
+        type: boolean
+        default: true
+      send_deb:
+        description: '🤖 Gửi file .deb qua Telegram'
+        type: boolean
+        default: true
+
+  # 🚀 TỰ ĐỘNG CHẠY NGẦM: Quét khi anh sửa file control
+  push:
+    paths:
+      - 'Tweaks/**/control'
+
+env:
+  TZ: "Asia/Ho_Chi_Minh"
+  THEOS: ${{ github.workspace }}/theos_engine
+
+jobs:
+  forge:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    steps:
+      - name: 📥 1.1 Checkout Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # =========================================================================
+      # 🤖 XỬ LÝ LÀM MỚI DANH SÁCH MENU OPTIONS (CƠ CHẾ ĐỘNG KHÔNG CẦN GIT PUSH)
+      # =========================================================================
+      - name: 🤖 1.2 Quét file control & Hiển thị Menu Động
+        id: auto_scan
+        run: |
+          echo "🔍 Máy chủ bắt đầu quét các dự án từ các thư mục Tweaks..."
+          
+          AVAILABLE_PROJS=""
+          for d in Tweaks/*/; do
+            if [ -d "$d" ]; then
+              CTRL_FILE="${d}control"
+              if [ -f "$CTRL_FILE" ]; then
+                PROJ_NAME=$(grep "^Name:" "$CTRL_FILE" | cut -d: -f2- | xargs)
+                if [ -z "$PROJ_NAME" ]; then
+                  PROJ_NAME=$(basename "$d")
+                fi
+                AVAILABLE_PROJS="$AVAILABLE_PROJS | $PROJ_NAME"
+              fi
+            fi
+          done
+          
+          echo "📊 Các dự án hiện tại hệ thống tìm thấy:$AVAILABLE_PROJS"
+
+          PROJ="${{ github.event.inputs.project }}"
+          
+          if [ "$PROJ" = "None" ] || [ "${{ github.event_name }}" = "push" ]; then
+            echo "✨ Hệ thống đã đồng bộ danh sách dự án xong!"
+            if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+              echo "⚠️ Bạn đang chọn 'None'. Vui lòng chọn một dự án cụ thể để tiến hành build thành phẩm."
+              exit 1
+            fi
+            exit 0
+          fi
+
+      # =========================================================================
+      # 🛠️ CẤU HÌNH THEOS ENGINE & TỰ TẠO FILE ROOTHIDE.H TẠI CHỖ (CHỐNG LỖI 404)
+      # =========================================================================
+      - name: 🛠️ 1.3 Setup Theos Engine
+        run: |
+          brew install make ldid dpkg
+          if [ ! -d "$THEOS" ]; then
+            git clone --recursive https://github.com/theos/theos.git $THEOS
+            curl -L https://github.com/theos/sdks/archive/master.tar.gz | tar -xz --strip-components=1 -C $THEOS/sdks
+          fi
+          
+          echo "⚙️ Khởi tạo Header RootHide an toàn trực tiếp từ lõi hệ thống..."
+          mkdir -p $THEOS/include
+          
+          cat << 'EOF' > $THEOS/include/roothide.h
+          #ifndef ROOTHIDE_H
+          #define ROOTHIDE_H
+
+          #import <Foundation/Foundation.h>
+
+          #ifndef __jbrand
+          #define __jbrand
+          #endif
+
+          static inline NSString* rootfs(NSString* path) {
+              return path;
+          }
+
+          static inline NSString* jbroot(NSString* path) {
+              #if defined(__arm64e__) && __has_feature(ptrauth_calls)
+              static NSString* jbroot_prefix = nil;
+              static dispatch_once_t onceToken;
+              dispatch_once(&onceToken, ^{
+                  char *env = getenv("JB_ROOT_PATH");
+                  if (env) {
+                      jbroot_prefix = [NSString stringWithUTF8String:env];
+                  } else {
+                      jbroot_prefix = @"/var/jb";
+                  }
+              });
+              if ([path hasPrefix:@"/"]) {
+                  return [jbroot_prefix stringByAppendingString:path];
+              }
+              #endif
+              return path;
+          }
+
+          #endif /* ROOTHIDE_H */
+          EOF
+          
+          echo "✅ Đã dựng xong cấu trúc roothide.h nguyên bản!"
+
+      - name: 🎯 2.1 Metadata & Version Bump
+        id: metadata
+        run: |
+          PROJ="${{ github.event.inputs.project }}"
+          
+          DIR=""
+          for d in Tweaks/*/; do
+            if [ -f "${d}control" ]; then
+              NAME_IN_CTRL=$(grep "^Name:" "${d}control" | cut -d: -f2- | xargs)
+              if [ "$NAME_IN_CTRL" = "$PROJ" ] || [ "$(basename "$d")" = "$PROJ" ]; then
+                DIR="Tweaks/$(basename "$d")"
+                break
+              fi
+            fi
+          done
+
+          if [ -z "$DIR" ]; then
+            echo "❌ Không tìm thấy thư mục của dự án: $PROJ"
+            exit 1
+          fi
+          
+          CTRL="$DIR/control"
+          
+          CUR_VER=$(grep "^Version:" "$CTRL" | cut -d: -f2- | xargs)
+          IFS='.' read -r -a v <<< "$CUR_VER"
+          MAJ=${v[0]}; MIN=${v[1]}; PAT=${v[2]}
+          
+          case "${{ github.event.inputs.ver_type }}" in
+            "Major (Đại tu)") MAJ=$((MAJ + 1)); MIN=0; PAT=0 ;;
+            "Minor (Tính năng)") MIN=$((MIN + 1)); PAT=0 ;;
+            "Patch (Vá lỗi)") PAT=$((PAT + 1)) ;;
+          esac
+          NEW_VER="$MAJ.$MIN.$PAT"
+          
+          NAME=$(grep "^Name:" "$CTRL" | cut -d: -f2- | xargs)
+          SAFE=$(echo "$NAME" | tr -d '() ' | sed 's/[^a-zA-Z0-9]//g')
+          
+          sed -i '' "s/^Version:.*/Version: $NEW_VER/" "$CTRL"
+          
+          echo "proj_dir=$DIR" >> $GITHUB_OUTPUT
+          echo "safe_name=$SAFE" >> $GITHUB_OUTPUT
+          echo "final_ver=$NEW_VER" >> $GITHUB_OUTPUT
+          echo "display_name=$NAME" >> $GITHUB_OUTPUT
+
+      # =========================================================================
+      # 📥 TỰ ĐỘNG PHÂN PHỐI HEADERS PUBLIC (YOUTUBE & GOOGLE PROTOBUF CORE)
+      # =========================================================================
+      - name: 📥 2.2 Máy chủ tự động quét và phân phối Headers
+        run: |
+          DIR="${{ steps.metadata.outputs.proj_dir }}"
+          
+          echo "🔍 Máy chủ bắt đầu quét mã nguồn dự án để tự cấu hình..."
+          
+          # 1. Xử lý nạp YouTubeHeader nếu phát hiện có sử dụng
+          if grep -rq "YouTubeHeader" "$DIR" 2>/dev/null; then
+            echo "📱 [Phát hiện] Dự án này cần bộ thư viện YouTubeHeader. Đang tự động nạp..."
+            rm -rf /tmp/yt_header_clone
+            git clone --quiet --depth=1 https://github.com/PoomSmart/YouTubeHeader.git /tmp/yt_header_clone
+            mkdir -p "$DIR/YouTubeHeader"
+            cp -r /tmp/yt_header_clone/* "$DIR/YouTubeHeader/"
+            mkdir -p Tweaks/YouTubeHeader
+            cp -r /tmp/yt_header_clone/* Tweaks/YouTubeHeader/
+            echo "✅ Tự động nạp YouTubeHeader thành công!"
+          fi
+
+          # 2. FIX PROTOBUF CHUẨN: TẢI TRỰC TIẾP TỪ GOOGLE PROTOBUF ARCHIVE (100% THÀNH CÔNG)
+          if grep -rq "protobuf" "$DIR" 2>/dev/null || [ "$(basename "$DIR")" = "YTLite" ]; then
+            echo "📦 [Phát hiện] Dự án yêu cầu thư viện Google Protobuf. Đang nạp cấu trúc Objective-C chuẩn..."
+            
+            # Làm sạch và khởi tạo lại cấu trúc đích
+            rm -rf Tweaks/protobuf
+            mkdir -p Tweaks/protobuf/objectivec
+            
+            # Tải trực tiếp mã nguồn Objective-C từ kho lưu trữ chuẩn của Google (bản v3.21.12 ổn định nhất cho Tweak)
+            curl -sL "https://github.com/protocolbuffers/protobuf/archive/refs/tags/v3.21.12.tar.gz" | tar -xz --strip-components=2 -C Tweaks/protobuf/objectivec/ "protobuf-3.21.12/objectivec/"
+            
+            echo "✅ Đồng bộ cấu trúc Google Protobuf Core thành công!"
+          fi
+
+          echo "✨ Máy chủ đã phân phối xong toàn bộ môi trường Headers cho dự án!"
+
+      - name: 🔨 3.1 Biên dịch Tweak
+        run: |
+          DIR="${{ steps.metadata.outputs.proj_dir }}"
+          export THEOS=$THEOS
+          rm -rf output && mkdir -p output
+          
+          if [[ "${{ github.event.inputs.clean_build }}" == "true" ]]; then
+            make -C "$DIR" clean THEOS=$THEOS
+          fi
+          
+          # Ép buộc ARCHS trực tiếp trong lệnh make
+          make -C "$DIR" package FINALPACKAGE=1 THEOS=$THEOS ARCHS="arm64 arm64e" ADDITIONAL_CFLAGS="-I. -I$THEOS/include -fobjc-arc"
+          
+          # Đảm bảo copy tất cả các file deb được tạo ra
+          cp "$DIR/packages/"*.deb output/
+
+      # 📦 Gói và lưu trữ file nội bộ trên máy ảo để làm link tải trực tiếp
+      - name: 📦 Upload Artifacts làm link tải trực tiếp
+        uses: actions/upload-artifact@v4
+        with:
+          name: tweak-deb-package
+          path: output/*.deb
+          retention-days: 1
+
+      # =========================================================================
+      # 🚚 PHẦN LIÊN THÔNG BẢO MẬT: CHỈ CHẠY KHI BẬT CÔNG TẮC PUBLISH = TRUE
+      # =========================================================================
+      - name: 📂 4.1 Kết nối và Tải Repo Public về Máy ảo
+        if: github.event.inputs.publish == 'true'
+        uses: actions/checkout@v4
+        with:
+          repository: '2KGT/repo'
+          path: 'public_repo_target'
+          token: ${{ secrets.REPO_TOKEN }}
+
+      - name: 🚚 4.2 Bắn file .deb thành phẩm sang Repo Public
+        if: github.event.inputs.publish == 'true'
+        run: |
+          mkdir -p public_repo_target/debs
+          cp output/*.deb public_repo_target/debs/
+          
+          cd public_repo_target
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add debs/*
+          git commit -m "🚀 [Auto Sync] Phát hành Tweak ${{ steps.metadata.outputs.display_name }} v${{ steps.metadata.outputs.final_ver }} [skip ci]" || echo "Không có thay đổi mới"
+          git push origin main
+
+      - name: 📝 4.3 Ghi nhận số Version mới tại Repo Build
+        if: github.event.inputs.publish == 'true' && success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          git add Tweaks/
+          git commit -m "📝 Bump version lên v${{ steps.metadata.outputs.final_ver }} [skip ci]" || echo "No changes"
+          git push origin main
+
+      # =========================================================================
+      # 🤖 BƯỚC 5.1: THÔNG BÁO KÈM CẤU TRÚC PHÍM BẤM 2 TẦNG SIÊU THẨM MỸ
+      # =========================================================================
+      - name: 🤖 5.1 Telegram Notification & Giao diện nút bấm mới
+        if: always() && github.event_name == 'workflow_dispatch' && github.event.inputs.project != 'None'
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TO: ${{ secrets.TELEGRAM_TO }}
+          JOB_STATUS: ${{ job.status }}
+          DISP_NAME: ${{ steps.metadata.outputs.display_name }}
+          VERSION: ${{ steps.metadata.outputs.final_ver }}
+          PROJ_INPUT: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.project || 'None' }}
+        run: |
+          if [ "$JOB_STATUS" == "success" ]; then
+            STATUS_TEXT="🟢 Thành công"
+          elif [ "$JOB_STATUS" == "cancelled" ]; then
+            STATUS_TEXT="🟡 Đã hủy luồng"
+          else
+            STATUS_TEXT="🔴 Có lỗi xảy ra"
+          fi
+
+          BODY="📱 <b>Dự án:</b> <code>${DISP_NAME:-$PROJ_INPUT}</code>"$'\n'
+          BODY="$BODY""💡 <b>Phiên bản:</b> <code>${VERSION:-Lỗi/Không rõ}</code>"$'\n'
+          BODY="$BODY""📊 <b>Trạng thái:</b> $STATUS_TEXT"
+
+          # Thiết lập link tải trực tiếp từ chính luồng Actions đang chạy
+          DOWNLOAD_URL="https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+
+          if [ "$JOB_STATUS" == "success" ]; then
+            # Cấu trúc bàn phím 2 tầng đúng yêu cầu: Tầng trên nút to dài, Tầng dưới 2 nút song song
+            KEYBOARD=$(jq -nrc \
+              --arg url1 "https://github.com/2KGT/repo" \
+              --arg url2 "https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}" \
+              --arg url3 "$DOWNLOAD_URL" \
+              '{inline_keyboard: [[{text: "🌐 Add source Sileo", url: $url1}], [{text: "📦 Xem luồng", url: $url2}, {text: "📥 Tải xuống", url: $url3}]]}')
+          else
+            KEYBOARD=$(jq -nrc \
+              --arg url1 "https://github.com/2KGT/repo" \
+              '{inline_keyboard: [[{text: "🌐 Add source Sileo", url: $url1}]]}')
+          fi
+
+          MSG="<b>🆙 Kyic Repository Update</b>"$'\n'"──────────────────"$'\n'"$BODY"$'\n'"──────────────────"
+
+          curl -s -X POST "https://api.telegram.org/bot$TOKEN/sendMessage" \
+            -d "chat_id=$TO" \
+            -d "parse_mode=HTML" \
+            -d "disable_web_page_preview=true" \
+            --data-urlencode "text=$MSG" \
+            --data-urlencode "reply_markup=$KEYBOARD"
+
+      # =========================================================================
+      # 🤖 BƯỚC 5.2: FIX ĐƯỜNG DẪN GỬI FILE TRỰC TIẾP QUA CHAT TRÁNH LỖI MAC
+      # =========================================================================
+      - name: 🤖 5.2 Bắn trực tiếp file .deb vào khung chat Telegram
+        if: success() && github.event_name == 'workflow_dispatch' && github.event.inputs.send_deb == 'true'
+        env:
+          TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TO: ${{ secrets.TELEGRAM_TO }}
+        run: |
+          echo "📂 Khởi chạy quét tệp tin trong thư mục output sạch..."
+          cd output
+          TARGET_FILE=$(ls *.deb 2>/dev/null | head -n 1)
+          
+          if [ -f "$TARGET_FILE" ]; then
+            echo "🚀 Phát hiện tệp tin chuẩn: $TARGET_FILE. Đang đẩy dữ liệu về Telegram..."
+            curl -F "chat_id=$TO" -F "document=@$TARGET_FILE" "https://api.telegram.org/bot$TOKEN/sendDocument"
+            echo "✅ Đồng bộ gửi file hoàn tất!"
+          else
+            echo "⚠️ Lỗi: Không thể tìm thấy file .deb đích."
+          fi
