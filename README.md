@@ -5,7 +5,9 @@
 <p align="center">
   <a href="sileo://source/https://2kgt.github.io/repo/">
     <img src="https://img.shields.io/badge/ADD_TO_SOURCE-848ef9?style=for-the-badge&logo=apple&logoColor=white" alt="Add to Source">
+  </a>
 </p>
+
 <p align="center">
   <a href="https://github.com/2KGT/repo/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/2KGT/repo/main.yml?label=Build%20Status&style=flat-square" alt="Build Status">
