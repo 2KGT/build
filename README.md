@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="https://2kgt.github.io/repo/depictions/icons/Kyic-hello.png" width="120" height="120" alt="Kyic Repository" style="border-radius: 28px;">
+  <img src="https://2kgt.github.io/repo/data/icons/Kyic-hello.png" width="120" height="120" alt="Kyic Repository" style="border-radius: 28px;">
 </p>
 <h1 align="center">Hallo</h1>
 <p align="center">
