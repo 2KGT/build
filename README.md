@@ -18,7 +18,7 @@
   </a>
 </p>
 <p align="center">
-  Đây là thư mục lưu trữ tĩnh (Static Distribution Zone) phục vụ phân phối ứng dụng và tweak.Kho lưu trữ tổng hợp Tweak & IPA chất lượng cao cho iOS, được tối ưu hóa đồng bộ tự động.
+  Đây là lưu trữ tĩnh (Static Distribution Zone) build đồng bộ tự động.
 </p>
 
 <p align="center">
