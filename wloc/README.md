@@ -241,5 +241,5 @@ Pages và Workers có chức năng hoàn toàn giống nhau, chọn cái nào tu
 
 ## Lời cảm ơn
 
-- [proxypin-wloc-spoofer](https://github.com/FFF686868/proxypin-wloc-spoofer) - Ý tưởng gốc về sửa định vị WLOC, bởi FFF686868
+- [proxypin-wloc-spoofer](https://github.com/FFF686868/proxypin-wloc-spoofer) - Yu9191 và.Ý tưởng gốc về sửa định vị WLOC, bởi FFF686868
 - [NSNanoCat/Util](https://github.com/NSNanoCat/util) - Framework công cụ script đa nền tảng
