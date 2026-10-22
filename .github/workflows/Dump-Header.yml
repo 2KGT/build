@@ -4,28 +4,28 @@ on:
   workflow_dispatch:
     inputs:
       ipa_url:
-        description: '🔗 Link IPADecrypt'
+        description: 'Link IPADecrypt'
         required: true
         type: string
       app_name:
-        description: '📁 Foder lưu (VD: YouTubeHeader)'
+        description: 'Foder lưu (VD: YouTubeHeader)'
         required: true
         default: 'YouTubeHeader'
         type: string
       target_classes:
-        description: '🎯 Nhặt Class (Để trống hốt TẤT CẢ)'
+        description: 'Nhặt Class (trống lây all)'
         required: false
         type: string
       clean_warehouse:
-        description: '🧨 Dọn sạch cũ trước khi nhập mới'
+        description: 'Dọn sạch cũ trước khi nhập mới'
         type: boolean
         default: false
       skip_filtering:
-        description: '🛡️ Tắt bộ lọc rác (Giữ lại tất cả, dù là file rỗng)'
+        description: 'Tắt bộ lọc rác (Giữ lại tất cả, dù là file rỗng)'
         type: boolean
         default: false
       apply_patch:
-        description: '🩹 Vá lỗi @class (Chống lỗi Forward Declaration)'
+        description: 'Fix @class (Chống lỗi Forward Declaration)'
         type: boolean
         default: true
 
