@@ -25,7 +25,7 @@ on:
         type: boolean
         default: false
       apply_patch:
-        description: 'Chống lỗi Forward Declaration fix @class'
+        description: 'Fix @class Forward Declaration '
         type: boolean
         default: true
 
