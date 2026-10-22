@@ -1,0 +1,9 @@
+Package: com.yourname.ytliquidglass
+Name: YTLiquidGlass
+Depends: mobilesubstrate, com.theos.orion (nếu dùng Orion loader)
+Version: 1.0.0
+Architecture: iphoneos-arm64
+Description: Kích hoạt giao diện hoặc tính năng ẩn trên YouTube.
+Maintainer: Tên của bạn
+Author: Tên của bạn
+Section: Tweaks
