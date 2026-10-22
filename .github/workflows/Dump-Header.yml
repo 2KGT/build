@@ -13,7 +13,7 @@ on:
         default: 'YouTubeHeader'
         type: string
       target_classes:
-        description: 'Nhặt Class (trống lây all)'
+        description: 'Nhặt Class (trống all)'
         required: false
         type: string
       clean_warehouse:
@@ -21,11 +21,11 @@ on:
         type: boolean
         default: false
       skip_filtering:
-        description: 'Tắt bộ lọc rác (Giữ lại tất cả, dù là file rỗng)'
+        description: 'Tắt bộ lọc rác (Giữ lại tất cả)'
         type: boolean
         default: false
       apply_patch:
-        description: 'Fix @class (Chống lỗi Forward Declaration)'
+        description: 'Chống lỗi Forward Declaration fix @class'
         type: boolean
         default: true
 
