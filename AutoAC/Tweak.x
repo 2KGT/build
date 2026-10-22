@@ -1,4 +1,4 @@
-
+import <AutoACheaders/AutoACheaders.h>
 #import <YouTubeHeader/YTIShowFullscreenInterstitialCommand.h> // Theo tham khảo từ image.png
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
