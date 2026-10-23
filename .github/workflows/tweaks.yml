@@ -187,7 +187,7 @@ jobs:
 
       # ══════════════════════════════════════════════════════
       # PHASE 2 — CHỜ & DỌN DẸP (chỉ khi thủ công + có tick)
-      # Telegram Phase 2 gửi bên trong clean.py → notify.notify_clean()
+      # Telegram Phase 2 gửi bên trong clean.py → tgbot.notify_clean()
       # ══════════════════════════════════════════════════════
 
       - name: "⏳ Chờ cloud xử lý xong trước khi dọn dẹp"
@@ -216,7 +216,6 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
         run: |
-          pip3 install requests --break-system-packages
           python3 .github/scripts/clean.py
 
       # 5. Gửi Thông Báo Trạng Thái Luồng Telegram bot
