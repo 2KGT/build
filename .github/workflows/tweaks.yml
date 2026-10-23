@@ -25,19 +25,19 @@ on:
       send_deb:
         description: '🤖 Gửi file qua Telegram'
         type: boolean
-        default: true        
-        
-        description: "🗑️ Xóa commit & workflow runs"
+        default: true
+      run_clean_theos:
+        description: '🧹 Dọn cache Theos sau khi build'
         type: boolean
         default: false
       run_clean_logs:
-
-        description: "⏱️ Timeout chờ xoá"
-        type: number
-        default: 90
+        description: '🗑️ Xóa commit & workflow runs'
         type: boolean
         default: false
       clean_delay_seconds:
+        description: '⏱️ Timeout chờ xoá (giây)'
+        type: number
+        default: 90
 
   push:
     paths:
@@ -52,6 +52,7 @@ jobs:
     runs-on: macos-latest
     permissions:
       contents: write
+      actions: write
     steps:
 
       # 1. Kiểm tra đầu vào và khởi tạo hệ thống
@@ -65,7 +66,7 @@ jobs:
         id: detect_project
         if: github.event_name == 'push'
         run: |
-          CHANGED_FILE=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} | grep 'control' | head -n 1)
+          CHANGED_FILE=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} | grep 'control' | head -n 1 || true)
           if [ -z "$CHANGED_FILE" ]; then
             echo "PROJECT_NAME=None" >> $GITHUB_ENV
           else
@@ -79,7 +80,6 @@ jobs:
           MANUAL_PROJECT: ${{ github.event.inputs.project }}
         run: |
           python3 .github/scripts/check_project.py
-
 
       - name: 🛠️ 1.4 Cài đặt Hệ thống Theos (Always run)
         run: |
@@ -97,11 +97,18 @@ jobs:
         if: steps.cache-theos.outputs.cache-hit != 'true'
         run: |
           git clone --recursive https://github.com/theos/theos.git $THEOS
+          mkdir -p $THEOS/sdks
           curl -L https://github.com/theos/sdks/archive/master.tar.gz | tar -xz --strip-components=1 -C $THEOS/sdks
 
       # 2. Tự động Biên Dịch (Build Engine)
       - name: 🚎 2.1 Tự động Biên Dịch (Build Engine)
         id: python_build
+        env:
+          INPUT_PROJECT: ${{ github.event.inputs.project || env.PROJECT_NAME }}
+          INPUT_VER_TYPE: ${{ github.event.inputs.ver_type || 'Patch (Vá lỗi)' }}
+          INPUT_CLEAN_BUILD: ${{ github.event.inputs.clean_build || 'true' }}
+          INPUT_PUBLISH: ${{ github.event.inputs.publish || 'false' }}
+          INPUT_SEND_DEB: ${{ github.event.inputs.send_deb || 'true' }}
         run: |
           export THEOS=${{ env.THEOS }}
           python3 -u .github/scripts/build_engine.py
@@ -134,51 +141,42 @@ jobs:
       - name: ♻️ 4.1 Sync & Release
         if: success() && github.event.inputs.publish == 'true' && steps.python_build.outputs.has_deb == 'true'
         run: |
-          # 1. Clone repo đích 
+          # 1. Clone repo đích
           git clone https://${{ secrets.REPO_TOKEN }}@github.com/2KGT/repo.git public_repo_target
-          
+
           shopt -s nullglob
-          
+
           # 2. Vòng lặp quét tất cả các file .deb trong thư mục output
           for file in output/*.deb; do
             filename=$(basename "$file")
-            
-            # Tách lấy Bundle ID gốc (Xóa phần đuôi từ dấu gạch dưới _ đầu tiên)
-            # Ví dụ: com.apple.tweak_1.0.0_iphoneos-arm.deb -> com.apple.tweak
+
+            # Tách Bundle ID gốc (phần trước dấu _ đầu tiên)
             bundle_id=$(echo "$filename" | cut -d'_' -f1)
-            
-            # GIẢI PHÁP 1: Nếu bạn muốn tên thư mục NGẮN GỌN (chỉ lấy phần chữ cuối cùng của Bundle ID)
-            # Ví dụ: com.2kgt.mytweak -> lấy chữ "mytweak" làm tên thư mục
+
+            # Tên thư mục ngắn gọn: lấy phần cuối của Bundle ID
+            # Muốn giữ nguyên dạng đầy đủ thì đổi thành: tweak_folder=$bundle_id
             tweak_folder=$(echo "$bundle_id" | awk -F'.' '{print $NF}')
-            
-            # GIẢI PHÁP 2 (Nếu muốn giữ nguyên dạng cũ thì đổi tweak_folder=$bundle_id)
-            
-            # ĐƯỜNG DẪN MỚI: public_repo_target/repo/debs/mytweak
+
             target_dir="public_repo_target/repo/debs/$tweak_folder"
-            
-            # Tạo thư mục chứa tweak
             mkdir -p "$target_dir"
-            
-            # Copy file .deb (arm/arm64...) vào thư mục riêng biệt vừa tạo
+
             cp "$file" "$target_dir/"
             echo "✅ Đã copy file deb $filename vào $target_dir"
-            
-            # 3. SỬA LỖI TÌM DYLIB CHO 1 FILE ARM:
-            # Vì chỉ có 1 file arm.deb, ta quét thẳng xem trong output có file .dylib nào không
-            # và copy nó đi cùng với file deb vào thư mục đích.
+
+            # Gom file .dylib (nếu có) đi cùng file deb
             for dylib in output/*.dylib; do
               if [ -f "$dylib" ]; then
                 cp "$dylib" "$target_dir/"
-                echo "🎯 Đã tìm thấy và gom $(basename "$dylib") vào $target_dir"
+                echo "🎯 Đã gom $(basename "$dylib") vào $target_dir"
               fi
             done
           done
-          
-          # 4. Tiến hành commit và push
+
+          # 3. Commit và push
           cd public_repo_target
           git config user.name "github-actions[bot]"
           git config user.email "actions@github.com"
-          
+
           git add repo/
           if git diff-index --quiet HEAD --; then
             echo "ℹ️ Không có thay đổi nào mới để cập nhật."
@@ -186,6 +184,7 @@ jobs:
             git commit -m "🚀 [Auto Sync] ${{ steps.python_build.outputs.display_name }} v${{ steps.python_build.outputs.final_ver }}"
             git push origin main
           fi
+
       # ══════════════════════════════════════════════════════
       # PHASE 2 — CHỜ & DỌN DẸP (chỉ khi thủ công + có tick)
       # Telegram Phase 2 gửi bên trong clean.py → notify.notify_clean()
@@ -209,7 +208,16 @@ jobs:
         id: clean
         if: >
           github.event_name == 'workflow_dispatch' &&
-          (inputs.run_clean_theos == true || inputs.run_clean_logs == true)          
+          (inputs.run_clean_theos == true || inputs.run_clean_logs == true)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_CLEAN_THEOS: ${{ inputs.run_clean_theos }}
+          RUN_CLEAN_LOGS: ${{ inputs.run_clean_logs }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+        run: |
+          pip3 install requests --break-system-packages
+          python3 .github/scripts/clean.py
 
       # 5. Gửi Thông Báo Trạng Thái Luồng Telegram bot
       - name: 📢 5.1 Gửi Thông Báo Trạng Thái Luồng
@@ -219,6 +227,7 @@ jobs:
           TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
           JOB_STATUS: ${{ job.status }}
           PROJECT_NAME: ${{ github.event.inputs.project || env.PROJECT_NAME || 'Unknown' }}
+          SEND_DEB: ${{ github.event.inputs.send_deb || 'true' }}
         run: |
           if [ -f "./.github/scripts/tgbot.py" ]; then
              # Sửa lỗi externally-managed-environment bằng cờ --break-system-packages
