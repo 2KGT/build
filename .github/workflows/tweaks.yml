@@ -35,7 +35,7 @@ on:
         type: boolean
         default: false
       clean_delay_seconds:
-        description: '⏱️ Timeout chờ xoá (giây)'
+        description: '⏱️ Timeout xoá (giây)'
         type: number
         default: 90
 
