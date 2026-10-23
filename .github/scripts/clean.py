@@ -1,4 +1,4 @@
-# .github/scripts/tgbot.py
+# .github/scripts/clean.py
 #!/usr/bin/env python3
 """
 clean.py — Dọn dẹp repo, được gọi từ Auto-sync-feather-sileo.yml Phase 2.
