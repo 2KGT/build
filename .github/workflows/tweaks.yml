@@ -18,7 +18,7 @@ on:
         description: '🤖 Gửi file đến Bot Telegram'
         type: boolean
         default: true
-      send_deb:
+       send_deb:
         description: '🆙 Đưa lên sileo (Test-Publish)'
         type: boolean
         default: false
