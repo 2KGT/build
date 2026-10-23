@@ -5,7 +5,19 @@ import shutil
 import sys
 import importlib
 import pkgutil
+import re
 from modules import __path__ as modules_path
+
+# Log build được ghi ra file này để bước "Tổng kết & Phân tích lỗi" trong workflow đọc
+BUILD_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build.log")
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+def _write_log(line):
+    try:
+        with open(BUILD_LOG, "a", encoding="utf-8") as fh:
+            fh.write(_ANSI.sub("", line) + "\n")
+    except OSError:
+        pass
 
 def log(stage, msg):
     print(f"\n🚀 [{stage.upper()}] {msg}")
@@ -24,22 +36,30 @@ def run_cmd(cmd, cwd=None, env=None):
     try:
         process = subprocess.Popen(cmd, cwd=cwd, env=full_env, stdout=subprocess.PIPE, 
                                    stderr=subprocess.STDOUT, text=True, bufsize=1)
-        for line in process.stdout: print(f"   [MAKE] {line.strip()}")
+        for line in process.stdout:
+            print(f"   [MAKE] {line.strip()}")
+            _write_log(line.rstrip())
         if process.wait() != 0: raise subprocess.CalledProcessError(process.returncode, cmd)
     except Exception as e:
-        log("ERROR", f"Lệnh {' '.join(cmd)} thất bại.")
+        log("ERROR", f"Lệnh {' '.join(cmd)} thất bại: {e}")
         sys.exit(1)
 
 def build_and_fix(target_dir, output_dir, new_ver=None):
     target_dir = os.path.abspath(target_dir)
+    open(BUILD_LOG, "w").close()  # làm mới log cho lần build này
     
     # --- TỰ ĐỘNG NHẬN DIỆN MODULE ---
     log("SYSTEM", "Đang kiểm tra các module hỗ trợ...")
     for loader, name, is_pkg in pkgutil.iter_modules(modules_path):
-        module = importlib.import_module(f"modules.{name}")
-        if hasattr(module, 'is_project_match') and module.is_project_match(target_dir):
-            log("INFO", f"Phát hiện dự án phù hợp với module: {name}")
-            module.setup(target_dir)
+        try:
+            module = importlib.import_module(f"modules.{name}")
+            if not (hasattr(module, 'is_project_match') and module.is_project_match(target_dir)):
+                continue
+        except Exception as e:  # một handler lỗi không được làm sập cả build
+            log("WARN", f"Bỏ qua module {name}: {e}")
+            continue
+        log("INFO", f"Phát hiện dự án phù hợp với module: {name}")
+        module.setup(target_dir)
     
     # --- BUILD ---
     if not os.path.exists(os.path.join(target_dir, "Makefile")):
@@ -62,7 +82,5 @@ def build_and_fix(target_dir, output_dir, new_ver=None):
     for file in deb_files:
         shutil.copy2(os.path.join(packages_dir, file), os.path.join(output_dir, file))
         log("SUCCESS", f"Đã xuất file: {file}")
-    
-    return True
     
     return True
