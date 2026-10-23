@@ -15,13 +15,13 @@ on:
         default: 'Patch (Vá lỗi)'
         options: [ 'Patch (Vá lỗi)', 'Minor (Tính năng)', 'Major (Đại tu)' ]
       publish:
-        description: '🆙 Xuất bản lên sileo (Test-Publish)'
+        description: '🆙 Xuất bản lên sileo (Test-Push)'
         type: boolean
         default: false
       send_deb:
         description: '🤖 Gửi file build đến BotTelegram'
         type: boolean
-        default: false
+        default: true
       clean_build:
         description: '🗑️ Xoá cache trước build'
         type: boolean
