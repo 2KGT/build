@@ -18,6 +18,7 @@ on:
         description: '🤖 Gửi file đến Bot Telegram'
         type: boolean
         default: true
+      send_deb:
         description: '🆙 Đưa lên sileo (Test-Publish)'
         type: boolean
         default: false
@@ -25,7 +26,6 @@ on:
         description: '🗑️ Xoá cache trước build'
         type: boolean
         default: true
-      send_deb:
       run_clean_theos:
           description: '🗑️ Xoá  Theos sau build'
         type: boolean
