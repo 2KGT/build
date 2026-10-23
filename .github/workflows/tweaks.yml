@@ -25,7 +25,19 @@ on:
       send_deb:
         description: '🤖 Gửi file qua Telegram'
         type: boolean
-        default: true
+        default: true        
+        
+        description: "🗑️ Xóa commit & workflow runs"
+        type: boolean
+        default: false
+      run_clean_logs:
+
+        description: "⏱️ Timeout chờ xoá"
+        type: number
+        default: 90
+        type: boolean
+        default: false
+      clean_delay_seconds:
 
   push:
     paths:
@@ -174,6 +186,30 @@ jobs:
             git commit -m "🚀 [Auto Sync] ${{ steps.python_build.outputs.display_name }} v${{ steps.python_build.outputs.final_ver }}"
             git push origin main
           fi
+      # ══════════════════════════════════════════════════════
+      # PHASE 2 — CHỜ & DỌN DẸP (chỉ khi thủ công + có tick)
+      # Telegram Phase 2 gửi bên trong clean.py → notify.notify_clean()
+      # ══════════════════════════════════════════════════════
+
+      - name: "⏳ Chờ cloud xử lý xong trước khi dọn dẹp"
+        if: >
+          github.event_name == 'workflow_dispatch' &&
+          (inputs.run_clean_theos == true || inputs.run_clean_logs == true)
+        run: |
+          DELAY="${{ inputs.clean_delay_seconds }}"
+          DELAY="${DELAY:-90}"
+          echo "⏱️  Chờ ${DELAY}s để cloud hoàn tất xử lý dữ liệu..."
+          for i in $(seq "$DELAY" -10 1); do
+            echo "   ⏳ Còn ${i}s..."
+            sleep 10
+          done
+          echo "✅ Bắt đầu dọn dẹp!"
+
+      - name: "🧹🗑️ Dọn dẹp repo (clean.py)"
+        id: clean
+        if: >
+          github.event_name == 'workflow_dispatch' &&
+          (inputs.run_clean_theos == true || inputs.run_clean_logs == true)          
 
       # 5. Gửi Thông Báo Trạng Thái Luồng Telegram bot
       - name: 📢 5.1 Gửi Thông Báo Trạng Thái Luồng
