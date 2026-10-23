@@ -1,3 +1,4 @@
+# .github/scripts/tgbot.py
 #!/usr/bin/env python3
 """
 clean.py — Dọn dẹp repo, được gọi từ Auto-sync-feather-sileo.yml Phase 2.
@@ -20,12 +21,18 @@ import sys
 import urllib.request
 import urllib.error
 
-# Thêm SCRIPTS_DIR vào path để import notify
+# Thêm SCRIPTS_DIR vào path để import tgbot
 _SCRIPTS_DIR = os.path.dirname(os.path.abspath(__file__))
 if _SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, _SCRIPTS_DIR)
 
-import notify as _notify
+try:
+    import tgbot as _notify  # notify_clean() nằm chung trong tgbot.py
+except ImportError:
+    class _notify:  # fallback khi chưa có tgbot.py
+        @staticmethod
+        def notify_clean(*args, **kwargs):
+            print("ℹ️  Không tìm thấy tgbot.py — bỏ qua thông báo Telegram.")
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -122,7 +129,9 @@ def clean_logs():
     run(["git", "config", "--global", "user.email", "github-actions[bot]@users.noreply.github.com"])
 
     run(["git", "checkout", "--orphan", "temp_clean_branch"])
-    run(["git", "add", "-A"])
+    # Chỉ stage file đã được Git theo dõi. Dùng "add -A" sẽ nuốt luôn theos_engine/,
+    # output/, public_repo_target/ (thư mục sinh ra khi build) vào lịch sử mới.
+    run(["git", "add", "-u"])
     run(["git", "commit", "-m", "🚀 Initial Clean Repository Base [skip ci]"])
     run(["git", "branch", "-D", "main"])
     run(["git", "branch", "-m", "main"])
@@ -201,7 +210,10 @@ def main():
         success = False
         raise
     finally:
-        _notify.notify_clean(run_theos, run_logs, success)
+        try:
+            _notify.notify_clean(run_theos, run_logs, success)
+        except Exception as e:
+            print(f"⚠️ Gửi thông báo Telegram lỗi: {e}")
 
 
 if __name__ == "__main__":
