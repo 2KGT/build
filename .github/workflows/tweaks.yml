@@ -15,19 +15,22 @@ on:
         default: 'Patch (Vá lỗi)'
         options: [ 'Patch (Vá lỗi)', 'Minor (Tính năng)', 'Major (Đại tu)' ]
       publish:
-        description: '🆙 Đưa lên sileo (Test-Publish)'
-        type: boolean
-        default: false
+
       send_deb:
-        description: '🤖 Gửi file qua Telegram'
+        description: '🤖 Gửi file build đến BotTelegram'
         type: boolean
         default: false
+
+        description: '🆙 Xuất bản lên sileo (Test-Publish)'
+        type: boolean
+        default: false
+
       clean_build:
         description: '🗑️ Xoá cache trước build'
         type: boolean
         default: true
       run_clean_theos:
-        description: '🗑️ Xoá  Theos sau build'
+        description: '🗑️ Xoá cache Theos sau build'
         type: boolean
         default: false
       run_clean_logs:
