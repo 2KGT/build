@@ -138,7 +138,7 @@ jobs:
             done
           fi
 
-      - name: 🚀 Xuất kho về Repo
+      - name: 🚀 Cất hàng vào kho bãi repo
         run: |
           git config --global user.name "GitHub Action"
           git config --global user.email "action@github.com"
