@@ -17,7 +17,7 @@ on:
       publish:
         description: '🆙 Đưa lên sileo (Test-Publish)'
         type: boolean
-        default: true
+        default: false
       send_deb:
         description: '🤖 Gửi file qua Telegram'
         type: boolean
