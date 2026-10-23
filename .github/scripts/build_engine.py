@@ -1,3 +1,4 @@
+# .github/scripts/build_engine.py
 import os
 import sys
 import importlib.util
@@ -8,6 +9,17 @@ import setup_theos
 def set_output(name, value):
     with open(os.environ.get('GITHUB_OUTPUT', '/dev/null'), 'a') as fh:
         print(f"{name}={value}", file=fh)
+
+def read_control_version(proj_dir, default="1.0.0"):
+    """Đọc Version thật từ file control của dự án."""
+    try:
+        with open(os.path.join(proj_dir, "control"), encoding="utf-8") as fh:
+            for line in fh:
+                if line.lower().startswith("version:"):
+                    return line.split(":", 1)[1].strip() or default
+    except OSError:
+        pass
+    return default
 
 def load_module_from_file(file_path):
     spec = importlib.util.spec_from_file_location("dynamic_module", file_path)
@@ -73,13 +85,15 @@ def main():
     # 5. BUILD & CHỐT KẾT QUẢ
     # Hàm core.build_and_fix bên trong đã có lệnh 'make clean' và 'make package'
     try:
-        core.build_and_fix(proj_dir, output_dir, "1.0.0")
+        version = read_control_version(proj_dir)
+        core.build_and_fix(proj_dir, output_dir, version)
         
         # Ghi output để GitHub Actions nhận diện
         set_output("status", "success")
         set_output("display_name", proj)
-        set_output("final_ver", "1.0.0")
-        set_output("has_deb", "true")
+        set_output("final_ver", version)
+        has_deb = os.path.isdir(output_dir) and any(f.endswith(".deb") for f in os.listdir(output_dir))
+        set_output("has_deb", "true" if has_deb else "false")
         core.log("SUCCESS", "Quá trình biên dịch hoàn tất!")
     except Exception as e:
         core.log("ERROR", f"Biên dịch thất bại: {e}")
