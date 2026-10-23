@@ -179,3 +179,28 @@ static UIViewController *AutoACTopViewController(void) {
 %hook YTCommerceEventGroupHandler
 - (void)addEventHandlers {}
 %end
+
+#pragma mark - Chẩn đoán (xoá khối này sau khi kiểm tra xong)
+
+// Hiện hộp thoại sau 5 giây để biết dylib đã nạp và class nào tồn tại trong bản YouTube hiện tại
+%ctor {
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 5 * NSEC_PER_SEC),
+                   dispatch_get_main_queue(), ^{
+        NSArray *names = @[@"YTTabBar", @"YTPivotBarView",
+                           @"YTSettingsSectionItemManager",
+                           @"YTAppSettingsPresentationData",
+                           @"YTPromoThrottleController",
+                           @"YTCommerceEventGroupHandler"];
+        NSMutableString *msg = [NSMutableString string];
+        for (NSString *n in names) {
+            [msg appendFormat:@"%@: %@\n", n, NSClassFromString(n) ? @"có" : @"KHÔNG"];
+        }
+        UIViewController *topVC = AutoACTopViewController();
+        if (!topVC) return;
+        UIAlertController *a = [UIAlertController alertControllerWithTitle:@"AutoAC đã nạp"
+                                                                   message:msg
+                                                            preferredStyle:UIAlertControllerStyleAlert];
+        [a addAction:[UIAlertAction actionWithTitle:@"OK" style:UIAlertActionStyleCancel handler:nil]];
+        [topVC presentViewController:a animated:YES completion:nil];
+    });
+}
