@@ -1,28 +1,62 @@
-#import <AutoACheaders/AutoACheaders.h>
-#import <YouTubeHeader/YTIShowFullscreenInterstitialCommand.h> // Theo tham khảo từ image.png
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
 #define kPrefs [NSUserDefaults standardUserDefaults]
 static const NSInteger AutoACSection = 2026;
 
-#pragma mark - Interfaces
+#pragma mark - Interfaces (khai báo tối thiểu, không phụ thuộc YouTubeHeader)
 
 @interface YTSettingsSectionItem : NSObject
 + (id)switchItemWithTitle:(id)arg1
-       titleDescription:(id)arg2
- accessibilityIdentifier:(id)arg3
-             switchOn:(BOOL)arg4
-          switchBlock:(id)arg5
-       settingItemId:(int)arg6;
+         titleDescription:(id)arg2
+  accessibilityIdentifier:(id)arg3
+                 switchOn:(BOOL)arg4
+              switchBlock:(id)arg5
+            settingItemId:(int)arg6;
+@end
+
+@interface YTSettingsSectionItemManager : NSObject
+@end
+
+@interface YTAppSettingsPresentationData : NSObject
+@end
+
+@interface YTTabBar : UIView
+- (void)autoAC_handleLongPress:(UILongPressGestureRecognizer *)gesture;
+@end
+
+@interface YTPromoThrottleController : NSObject
+@end
+
+@interface YTCommerceEventGroupHandler : NSObject
 @end
 
 @interface UIViewController (AutoAC)
 - (void)setSectionItems:(id)items
-           forCategory:(NSInteger)category
-                 title:(id)title
-      titleDescription:(id)description;
+            forCategory:(NSInteger)category
+                  title:(id)title
+       titleDescription:(id)description;
 @end
+
+#pragma mark - Helpers
+
+// Lấy ViewController trên cùng, không dùng keyWindow (đã bị deprecated từ iOS 13)
+static UIViewController *AutoACTopViewController(void) {
+    UIWindow *keyWindow = nil;
+    for (UIScene *scene in UIApplication.sharedApplication.connectedScenes) {
+        if (![scene isKindOfClass:UIWindowScene.class]) continue;
+        if (scene.activationState != UISceneActivationStateForegroundActive) continue;
+        for (UIWindow *w in ((UIWindowScene *)scene).windows) {
+            if (w.isKeyWindow) { keyWindow = w; break; }
+        }
+        if (keyWindow) break;
+    }
+    UIViewController *topVC = keyWindow.rootViewController;
+    while (topVC.presentedViewController) {
+        topVC = topVC.presentedViewController;
+    }
+    return topVC;
+}
 
 #pragma mark - Hook Settings
 
@@ -30,7 +64,10 @@ static const NSInteger AutoACSection = 2026;
 - (void)updateSectionForCategory:(NSUInteger)category withEntry:(id)entry {
     if (category == AutoACSection) {
         Class itemClass = %c(YTSettingsSectionItem);
-        if (!itemClass) return %orig;
+        if (!itemClass) {
+            %orig;
+            return;
+        }
 
         NSMutableArray *items = [NSMutableArray array];
 
@@ -44,16 +81,25 @@ static const NSInteger AutoACSection = 2026;
                                            }
                                          settingItemId:0]];
 
-        // Sửa lỗi truy xuất Delegate: Thử nhiều key khác nhau để tránh bị nil
-        id settingsVC = [self valueForKey:@"_settingsViewControllerDelegate"] 
-                     ?: [self valueForKey:@"settingsViewControllerDelegate"]
-                     ?: [self valueForKey:@"_delegate"];
+        // Truy xuất Delegate: thử nhiều key khác nhau để tránh bị nil
+        id settingsVC = nil;
+        NSArray<NSString *> *keys = @[@"_settingsViewControllerDelegate",
+                                      @"settingsViewControllerDelegate",
+                                      @"_delegate"];
+        for (NSString *key in keys) {
+            @try {
+                settingsVC = [self valueForKey:key];
+            } @catch (NSException *e) {
+                settingsVC = nil;
+            }
+            if (settingsVC) break;
+        }
 
         if (settingsVC && [settingsVC respondsToSelector:@selector(setSectionItems:forCategory:title:titleDescription:)]) {
             [(id)settingsVC setSectionItems:items
-                               forCategory:AutoACSection
-                                     title:@"AutoAC Settings"
-                          titleDescription:@"Cấu hình bởi 2KGT"];
+                                forCategory:AutoACSection
+                                      title:@"AutoAC Settings"
+                           titleDescription:@"Cấu hình bởi 2KGT"];
         }
         return;
     }
@@ -63,38 +109,42 @@ static const NSInteger AutoACSection = 2026;
 
 %hook YTAppSettingsPresentationData
 + (NSArray *)settingsCategoryOrder {
-    NSMutableArray *order = [%orig mutableCopy];
-    if (order && ![order containsObject:@(AutoACSection)]) {
-        [order insertObject:@(AutoACSection) atIndex:1];
+    NSArray *origOrder = %orig;
+    NSMutableArray *order = [origOrder mutableCopy];
+    if (!order) return origOrder;
+
+    if (![order containsObject:@(AutoACSection)]) {
+        NSUInteger index = order.count > 1 ? 1 : order.count;
+        [order insertObject:@(AutoACSection) atIndex:index];
     }
     return [order copy];
 }
 %end
 
-#pragma mark - Hook Long Press (Sửa lỗi không nhận diện)
+#pragma mark - Hook Long Press
 
-%hook YTTabBar // Hook vào class con của YouTube thay vì UITabBar thuần
+%hook YTTabBar
 
 - (void)layoutSubviews {
     %orig;
-    
-    // Sử dụng associated object hoặc tag để kiểm tra tránh add trùng
+
+    // Dùng associated object để tránh add trùng
     if (!objc_getAssociatedObject(self, @selector(autoAC_handleLongPress:))) {
-        
-        UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc] 
-            initWithTarget:self 
-            action:@selector(autoAC_handleLongPress:)];
-        
+
+        UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc]
+            initWithTarget:self
+                    action:@selector(autoAC_handleLongPress:)];
+
         lp.minimumPressDuration = 0.5;
-        lp.cancelsTouchesInView = NO; // Quan trọng: Không làm liệt các nút bấm khác
-        
+        lp.cancelsTouchesInView = NO; // Không làm liệt các nút bấm khác
+
         [self addGestureRecognizer:lp];
-        
-        objc_setAssociatedObject(self, 
-                                 @selector(autoAC_handleLongPress:), 
-                                 @(YES), 
+
+        objc_setAssociatedObject(self,
+                                 @selector(autoAC_handleLongPress:),
+                                 @(YES),
                                  OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-                                 
+
         NSLog(@"[AutoAC] Gesture đã được nạp vào YTTabBar");
     }
 }
@@ -103,27 +153,24 @@ static const NSInteger AutoACSection = 2026;
 - (void)autoAC_handleLongPress:(UILongPressGestureRecognizer *)gesture {
     if (gesture.state != UIGestureRecognizerStateBegan) return;
 
-    NSLog(@"[AutoAC] ✅ LONG PRESS DETECTED");
+    NSLog(@"[AutoAC] LONG PRESS DETECTED");
 
-    // Lấy Top ViewController một cách an toàn hơn
-    UIViewController *topVC = [UIApplication sharedApplication].keyWindow.rootViewController;
-    while (topVC.presentedViewController) {
-        topVC = topVC.presentedViewController;
-    }
+    UIViewController *topVC = AutoACTopViewController();
+    if (!topVC) return;
 
     UIAlertController *alert = [UIAlertController alertControllerWithTitle:@"AutoAC"
                                                                    message:@"Kích hoạt tính năng thành công! ✅"
                                                             preferredStyle:UIAlertControllerStyleAlert];
 
     [alert addAction:[UIAlertAction actionWithTitle:@"Đóng" style:UIAlertActionStyleCancel handler:nil]];
-    
+
     [topVC presentViewController:alert animated:YES completion:nil];
 }
 %end
 
-#pragma mark - Fix Promo (Tham khảo từ image.png)
+#pragma mark - Fix Promo
 
-// Chặn các thông báo làm phiền có thể đè lên UI theo image.png
+// Chặn các thông báo làm phiền có thể đè lên UI
 %hook YTPromoThrottleController
 - (BOOL)canShowThrottledPromo { return NO; }
 - (BOOL)canShowThrottledPromoWithFrequencyCap:(id)arg1 { return NO; }
