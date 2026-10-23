@@ -1,3 +1,5 @@
+@class NSObject, NSString, NSArray, NSDictionary, UIView, UIViewController;
+@protocol NSObject, NSCopying, NSCoding;
 // Refinery Bridge Header: Toàn tập
 @import Foundation; @import UIKit;
 @class A_GA2_GA6_GARGtGGA23_GA15_GA21_GARG_AByAByAByAByABy;
