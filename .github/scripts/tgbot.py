@@ -3,7 +3,8 @@
 import os
 import glob
 import json
-import requests
+import urllib.error
+import urllib.request
 from datetime import datetime
 
 def get_vietnamese_time():
@@ -17,12 +18,13 @@ def get_vietnamese_time():
     
     return f"{time_str} {day_str} {date_str}"
 
-def get_fallback_project_info():
+def get_fallback_project_info(proj_dir=""):
     """Tự động quét file cấu hình trong mã nguồn để tìm thông tin chính xác khi hệ thống bị lỗi nửa chừng"""
     info = {"name": "Không xác định", "bundle_id": "Unknown", "version": "1.0.0"}
     
-    if os.path.exists("control"):
-        with open("control", "r", encoding="utf-8") as f:
+    control_path = os.path.join(proj_dir, "control") if proj_dir else "control"
+    if os.path.exists(control_path):
+        with open(control_path, "r", encoding="utf-8") as f:
             for line in f:
                 if line.startswith("Name:"):
                     info["name"] = line.split(":", 1)[1].strip()
@@ -33,6 +35,8 @@ def get_fallback_project_info():
     return info
 
 def send_telegram():
+    import requests  # import muộn: notify_clean() không cần thư viện này
+
     token = os.environ.get("TELEGRAM_TOKEN")
     chat_id = os.environ.get("TELEGRAM_TO")
     status = os.environ.get("JOB_STATUS", "failed").upper()
@@ -47,12 +51,18 @@ def send_telegram():
 
     # Nhận diện thông tin Dự án đang được Build
     f_name = os.environ.get("PROJECT_NAME", "").strip()
+    send_deb = os.environ.get("SEND_DEB", "true").strip().lower() != "false"
     f_ver = "1.0.0"
     f_bid = "Unknown"
     
     if not f_name or f_name.lower() in ["none", "unknown", "null", ""]:
         local_info = get_fallback_project_info()
         f_name = local_info["name"]
+        f_bid = local_info["bundle_id"]
+        f_ver = local_info["version"]
+    else:
+        # Đã biết tên dự án -> lấy Bundle ID & phiên bản thật từ <Dự án>/control
+        local_info = get_fallback_project_info(f_name)
         f_bid = local_info["bundle_id"]
         f_ver = local_info["version"]
 
@@ -127,11 +137,12 @@ def send_telegram():
             "parse_mode": "HTML",
             "disable_web_page_preview": True,
             "reply_markup": keyboard
-        }
+        },
+        timeout=30,
     )
 
-    # 2. Đẩy file đính kèm trực tiếp lên cuộc trò chuyện (Chỉ khi build thành công)
-    if status == "SUCCESS":
+    # 2. Đẩy file đính kèm trực tiếp lên cuộc trò chuyện (Chỉ khi build thành công và bật "Gửi file qua Telegram")
+    if status == "SUCCESS" and send_deb:
         for file_path in deb_files:
             filename = os.path.basename(file_path)
             file_caption = f"📦 <b>File:</b> <code>{filename}</code>"
@@ -142,6 +153,63 @@ def send_telegram():
                     files={"document": f}, 
                     timeout=120
                 )
+
+# ── Thông báo Phase 2 (dọn dẹp) — clean.py gọi: tgbot.notify_clean(...) ─────────
+
+def _post_json(method, payload):
+    """Gọi Telegram Bot API bằng urllib (không cần cài thêm gói nào)."""
+    token = os.environ.get("TELEGRAM_TOKEN", "").strip()
+    chat_id = os.environ.get("TELEGRAM_TO", "").strip()
+    if not token or not chat_id:
+        print("ℹ️  Chưa cấu hình TELEGRAM_TOKEN / TELEGRAM_TO — bỏ qua thông báo.")
+        return False
+    data = json.dumps({"chat_id": chat_id, **payload}).encode("utf-8")
+    req = urllib.request.Request(
+        f"https://api.telegram.org/bot{token}/{method}",
+        data=data, headers={"Content-Type": "application/json"}, method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            return 200 <= resp.status < 300
+    except urllib.error.HTTPError as e:
+        print(f"⚠️ Telegram HTTP {e.code}")
+    except Exception as e:
+        print(f"⚠️ Gửi Telegram lỗi: {e}")
+    return False
+
+
+def notify_clean(run_theos, run_logs, success):
+    """Báo kết quả dọn dẹp lên Telegram. Không bao giờ làm sập workflow."""
+    tasks = []
+    if run_theos:
+        tasks.append("Xoá ghost submodule Theos")
+    if run_logs:
+        tasks.append("Xoá commit, workflow runs &amp; cache")
+
+    repo = os.environ.get("GITHUB_REPOSITORY", "")
+    run_id = os.environ.get("GITHUB_RUN_ID", "")
+    run_url = f"https://github.com/{repo}/actions/runs/{run_id}" if repo and run_id else ""
+
+    title = ("🧹 <b>DỌN DẸP HOÀN TẤT</b>" if success
+             else "❌ <b>DỌN DẸP THẤT BẠI</b>")
+    lines = [
+        title,
+        "──────────────────",
+        f"📂 <b>Repo:</b> <code>{repo}</code>" if repo else "",
+        "🛠️ <b>Đã chạy:</b> " + (", ".join(tasks) if tasks else "không có tác vụ"),
+        f"🔗 <a href='{run_url}'>Xem Log Actions tại đây</a>" if run_url else "",
+        "──────────────────",
+        f"⏰ <b>Thời gian:</b> <code>{get_vietnamese_time()}</code>",
+    ]
+    ok = _post_json("sendMessage", {
+        "text": "\n".join(l for l in lines if l),
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True,
+    })
+    if ok:
+        print("📨 Đã gửi thông báo dọn dẹp lên Telegram.")
+    return ok
+
 
 if __name__ == "__main__":
     send_telegram()
