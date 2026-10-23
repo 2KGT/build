@@ -23,7 +23,7 @@ on:
         type: boolean
         default: true
       clean_build:
-        description: '🗑️ Xoá cache trước build'
+        description: '🗑️ Xoá cache cũ trước build'
         type: boolean
         default: true
       run_clean_theos:
