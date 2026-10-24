@@ -15,15 +15,15 @@ on:
         default: 'Patch (Vá lỗi)'
         options: [ 'Patch (Vá lỗi)', 'Minor (Tính năng)', 'Major (Đại tu)' ]
       publish:
-        description: '🆙 Xuất bản lên sileo (Test-Push)'
+        description: '🆙 Xuất bản lên sileo (Test-Publish)'
         type: boolean
         default: false
       send_deb:
         description: '🤖 Gửi file build đến BotTelegram'
         type: boolean
-        default: true
+        default: false
       clean_build:
-        description: '🗑️ Xoá cache cũ trước build'
+        description: '🗑️ Xoá cache trước build'
         type: boolean
         default: true
       run_clean_theos:
@@ -105,7 +105,7 @@ jobs:
         id: python_build
         env:
           INPUT_PROJECT: ${{ github.event.inputs.project || env.PROJECT_NAME }}
-          INPUT_VER_TYPE: ${{ github.event.inputs.ver_type || 'Patch (Vá lỗi)' }}
+          INPUT_VER_TYPE: ${{ github.event.inputs.ver_type }}
           INPUT_CLEAN_BUILD: ${{ github.event.inputs.clean_build || 'true' }}
           INPUT_PUBLISH: ${{ github.event.inputs.publish || 'false' }}
           INPUT_SEND_DEB: ${{ github.event.inputs.send_deb || 'true' }}
@@ -118,7 +118,11 @@ jobs:
         run: |
           if [ "${{ steps.python_build.outcome }}" == "success" ]; then
             echo "## ✅ Build thành công: ${{ steps.python_build.outputs.display_name }}" >> $GITHUB_STEP_SUMMARY
-            echo "Phiên bản: **v${{ steps.python_build.outputs.final_ver }}**" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ steps.python_build.outputs.bumped }}" == "true" ]; then
+              echo "Phiên bản: **v${{ steps.python_build.outputs.old_ver }} → v${{ steps.python_build.outputs.final_ver }}**" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "Phiên bản: **v${{ steps.python_build.outputs.final_ver }}** (giữ nguyên)" >> $GITHUB_STEP_SUMMARY
+            fi
           else
             echo "## ❌ Build thất bại" >> $GITHUB_STEP_SUMMARY
             echo "### Phân tích lỗi nhanh:" >> $GITHUB_STEP_SUMMARY
@@ -127,6 +131,18 @@ jobs:
             grep -iE "error|fatal|warning|ld:|make:" .github/scripts/build.log | tail -n 20 >> $GITHUB_STEP_SUMMARY || echo "Không thấy chi tiết lỗi." >> $GITHUB_STEP_SUMMARY
             echo '```' >> $GITHUB_STEP_SUMMARY
           fi
+
+      # 2.3 Lưu version mới vào file control trên repo (chỉ khi build thành công và có tăng version)
+      - name: 🔖 2.3 Lưu version mới vào repo
+        if: success() && steps.python_build.outputs.bumped == 'true'
+        run: |
+          PROJ="${{ steps.python_build.outputs.display_name }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add "$PROJ/control"
+          git commit -m "🔖 $PROJ v${{ steps.python_build.outputs.final_ver }} [skip ci]" || { echo "Không có thay đổi để commit."; exit 0; }
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+          git push
 
       # 3. Lưu trữ Artifacts (để tải về từ GitHub)
       - name: 📦 3.1 Upload Artifacts
