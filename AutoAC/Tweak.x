@@ -1,20 +1,24 @@
 #import <UIKit/UIKit.h>
 #import <objc/runtime.h>
 
+// BuildInfo.h do build_engine.py tạo tự động (chứa version của lần build này).
+// Không có file này thì tweak vẫn build bình thường, chỉ không hiện số version.
+#if __has_include("BuildInfo.h")
+#import "BuildInfo.h"
+#endif
+#ifndef TWEAK_BUILD_VERSION
+#define TWEAK_BUILD_VERSION @""
+#endif
+
 #define kPrefs [NSUserDefaults standardUserDefaults]
 static NSString *const kAutoClearCacheKey = @"kAutoClearCache";
 
 #pragma mark - Interfaces (khai báo tối thiểu, không phụ thuộc YouTubeHeader)
 
-// Thanh tiêu đề trên cùng của YouTube (chứa logo, chuông, tìm kiếm...)
-@interface YTHeaderView : UIView
-- (void)autoAC_handleLogoLongPress:(UILongPressGestureRecognizer *)gesture;
-@end
-
 @interface YTCommerceEventGroupHandler : NSObject
 @end
 
-#pragma mark - Cửa sổ chính
+#pragma mark - Tiện ích
 
 // Lấy cửa sổ đang hiển thị, không dùng keyWindow (đã deprecated từ iOS 13)
 static UIWindow *AutoACKeyWindow(void) {
@@ -28,6 +32,12 @@ static UIWindow *AutoACKeyWindow(void) {
         }
     }
     return fallback;
+}
+
+// "v1.1.1" hoặc "" nếu build không có thông tin version
+static NSString *AutoACVersionTag(void) {
+    NSString *v = TWEAK_BUILD_VERSION;
+    return v.length > 0 ? [@"v" stringByAppendingString:v] : @"";
 }
 
 #pragma mark - Dọn cache
@@ -78,38 +88,35 @@ static unsigned long long AutoACClearCache(void) {
     return before > after ? before - after : 0;
 }
 
-#pragma mark - Hub thông báo
+#pragma mark - Hub kết quả (viên thuốc 1 dòng)
 
 static __weak UIView *gHub = nil;
 
-// Viên thuốc kính mờ trượt xuống từ trên cùng
-static void AutoACShowHub(NSString *symbol, UIColor *tint, NSString *titleText,
-                          NSString *subText, NSTimeInterval duration) {
+static void AutoACShowHub(NSString *symbol, UIColor *tint, NSString *text,
+                          NSString *suffix, NSTimeInterval duration) {
     UIWindow *window = AutoACKeyWindow();
     if (!window) return;
 
-    // Có hub cũ đang hiện thì gỡ trước
     [gHub removeFromSuperview];
 
-    // Khung ngoài (đổ bóng) + lớp kính mờ bên trong
     UIView *container = [[UIView alloc] init];
     container.translatesAutoresizingMaskIntoConstraints = NO;
     container.userInteractionEnabled = NO;
     container.layer.shadowColor = UIColor.blackColor.CGColor;
-    container.layer.shadowOpacity = 0.18;
-    container.layer.shadowRadius = 14;
-    container.layer.shadowOffset = CGSizeMake(0, 6);
+    container.layer.shadowOpacity = 0.14;
+    container.layer.shadowRadius = 8;
+    container.layer.shadowOffset = CGSizeMake(0, 3);
 
     UIVisualEffectView *blur = [[UIVisualEffectView alloc]
         initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemThinMaterial]];
     blur.translatesAutoresizingMaskIntoConstraints = NO;
-    blur.layer.cornerRadius = 22;
+    blur.layer.cornerRadius = 14;
     blur.layer.cornerCurve = kCACornerCurveContinuous;
     blur.clipsToBounds = YES;
     [container addSubview:blur];
 
     UIImageSymbolConfiguration *cfg =
-        [UIImageSymbolConfiguration configurationWithPointSize:26 weight:UIImageSymbolWeightSemibold];
+        [UIImageSymbolConfiguration configurationWithPointSize:13 weight:UIImageSymbolWeightSemibold];
     UIImageView *icon = [[UIImageView alloc] initWithImage:
         [UIImage systemImageNamed:symbol withConfiguration:cfg]];
     icon.tintColor = tint;
@@ -117,26 +124,24 @@ static void AutoACShowHub(NSString *symbol, UIColor *tint, NSString *titleText,
     [icon setContentHuggingPriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
     [icon setContentCompressionResistancePriority:UILayoutPriorityRequired forAxis:UILayoutConstraintAxisHorizontal];
 
-    UILabel *titleLabel = [[UILabel alloc] init];
-    titleLabel.text = titleText;
-    titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
-    titleLabel.textColor = UIColor.labelColor;
-    titleLabel.numberOfLines = 0;
+    NSMutableAttributedString *attributed = [[NSMutableAttributedString alloc]
+        initWithString:text
+            attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:12.5 weight:UIFontWeightSemibold],
+                         NSForegroundColorAttributeName: UIColor.labelColor}];
+    if (suffix.length > 0) {
+        [attributed appendAttributedString:[[NSAttributedString alloc]
+            initWithString:[@"  ·  " stringByAppendingString:suffix]
+                attributes:@{NSFontAttributeName: [UIFont systemFontOfSize:11 weight:UIFontWeightRegular],
+                             NSForegroundColorAttributeName: UIColor.secondaryLabelColor}]];
+    }
+    UILabel *label = [[UILabel alloc] init];
+    label.attributedText = attributed;
+    label.numberOfLines = 1;
 
-    UILabel *subLabel = [[UILabel alloc] init];
-    subLabel.text = subText;
-    subLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightRegular];
-    subLabel.textColor = UIColor.secondaryLabelColor;
-    subLabel.numberOfLines = 0;
-
-    UIStackView *textStack = [[UIStackView alloc] initWithArrangedSubviews:@[titleLabel, subLabel]];
-    textStack.axis = UILayoutConstraintAxisVertical;
-    textStack.spacing = 2;
-
-    UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[icon, textStack]];
+    UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[icon, label]];
     row.axis = UILayoutConstraintAxisHorizontal;
     row.alignment = UIStackViewAlignmentCenter;
-    row.spacing = 12;
+    row.spacing = 6;
     row.translatesAutoresizingMaskIntoConstraints = NO;
     [blur.contentView addSubview:row];
 
@@ -149,25 +154,24 @@ static void AutoACShowHub(NSString *symbol, UIColor *tint, NSString *titleText,
         [blur.leadingAnchor constraintEqualToAnchor:container.leadingAnchor],
         [blur.trailingAnchor constraintEqualToAnchor:container.trailingAnchor],
 
-        [row.topAnchor constraintEqualToAnchor:blur.contentView.topAnchor constant:12],
-        [row.bottomAnchor constraintEqualToAnchor:blur.contentView.bottomAnchor constant:-12],
-        [row.leadingAnchor constraintEqualToAnchor:blur.contentView.leadingAnchor constant:18],
-        [row.trailingAnchor constraintEqualToAnchor:blur.contentView.trailingAnchor constant:-20],
+        [row.topAnchor constraintEqualToAnchor:blur.contentView.topAnchor constant:7],
+        [row.bottomAnchor constraintEqualToAnchor:blur.contentView.bottomAnchor constant:-7],
+        [row.leadingAnchor constraintEqualToAnchor:blur.contentView.leadingAnchor constant:11],
+        [row.trailingAnchor constraintEqualToAnchor:blur.contentView.trailingAnchor constant:-13],
 
-        [container.topAnchor constraintEqualToAnchor:window.safeAreaLayoutGuide.topAnchor constant:8],
+        [container.topAnchor constraintEqualToAnchor:window.safeAreaLayoutGuide.topAnchor constant:4],
         [container.centerXAnchor constraintEqualToAnchor:window.centerXAnchor],
         [container.leadingAnchor constraintGreaterThanOrEqualToAnchor:window.leadingAnchor constant:16],
         [container.trailingAnchor constraintLessThanOrEqualToAnchor:window.trailingAnchor constant:-16],
     ]];
     [window layoutIfNeeded];
 
-    // Hiện: trượt xuống + phóng nhẹ
     container.alpha = 0;
-    container.transform = CGAffineTransformConcat(CGAffineTransformMakeScale(0.92, 0.92),
-                                                  CGAffineTransformMakeTranslation(0, -16));
-    [UIView animateWithDuration:0.45
+    container.transform = CGAffineTransformConcat(CGAffineTransformMakeScale(0.9, 0.9),
+                                                  CGAffineTransformMakeTranslation(0, -10));
+    [UIView animateWithDuration:0.35
                           delay:0
-         usingSpringWithDamping:0.8
+         usingSpringWithDamping:0.85
           initialSpringVelocity:0.6
                         options:UIViewAnimationOptionCurveEaseOut
                      animations:^{
@@ -175,15 +179,12 @@ static void AutoACShowHub(NSString *symbol, UIColor *tint, NSString *titleText,
         container.transform = CGAffineTransformIdentity;
     } completion:nil];
 
-    UINotificationFeedbackGenerator *haptic = [[UINotificationFeedbackGenerator alloc] init];
-    [haptic notificationOccurred:UINotificationFeedbackTypeSuccess];
-
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(duration * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
-        [UIView animateWithDuration:0.3
+        [UIView animateWithDuration:0.22
                          animations:^{
             container.alpha = 0;
-            container.transform = CGAffineTransformMakeTranslation(0, -12);
+            container.transform = CGAffineTransformMakeTranslation(0, -8);
         } completion:^(BOOL finished) {
             [container removeFromSuperview];
         }];
@@ -192,16 +193,17 @@ static void AutoACShowHub(NSString *symbol, UIColor *tint, NSString *titleText,
 
 // Hub báo kết quả dọn cache kèm dung lượng đã giải phóng
 static void AutoACShowCacheHub(unsigned long long bytes) {
+    NSString *tag = AutoACVersionTag();
     if (bytes > 0) {
         NSByteCountFormatter *formatter = [[NSByteCountFormatter alloc] init];
         formatter.countStyle = NSByteCountFormatterCountStyleFile;
         formatter.allowsNonnumericFormatting = NO;
-        NSString *sub = [NSString stringWithFormat:@"Giải phóng %@",
-                         [formatter stringFromByteCount:(long long)bytes]];
-        AutoACShowHub(@"sparkles", UIColor.systemYellowColor, @"Đã dọn sạch cache", sub, 2.6);
+        NSString *text = [NSString stringWithFormat:@"Đã dọn %@",
+                          [formatter stringFromByteCount:(long long)bytes]];
+        AutoACShowHub(@"sparkles", UIColor.systemYellowColor, text, tag, 2.2);
     } else {
         AutoACShowHub(@"checkmark.circle.fill", UIColor.systemGreenColor,
-                      @"Cache đã sạch", @"Không có gì cần dọn", 2.6);
+                      @"Cache đã sạch", tag, 2.2);
     }
 }
 
@@ -220,7 +222,7 @@ static void AutoACRunCleanup(void) {
     });
 }
 
-#pragma mark - Menu trên logo (công tắc + nút dọn ngay)
+#pragma mark - Menu mini (kiểu popover chọn mô hình)
 
 static __weak UIView *gMenu = nil;
 
@@ -228,100 +230,176 @@ static void AutoACDismissMenu(void) {
     UIView *backdrop = gMenu;
     if (!backdrop) return;
     gMenu = nil;
-    [UIView animateWithDuration:0.2 animations:^{
+    [UIView animateWithDuration:0.16 animations:^{
         backdrop.alpha = 0;
     } completion:^(BOOL finished) {
         [backdrop removeFromSuperview];
     }];
 }
 
-static void AutoACShowMenu(void) {
+// Một hàng: biểu tượng + tiêu đề + dòng phụ (không nhận chạm, để nút bên dưới nhận)
+static UIStackView *AutoACRowStack(NSString *symbol, UIColor *tint, NSString *title, NSString *sub) {
+    UIImageSymbolConfiguration *cfg =
+        [UIImageSymbolConfiguration configurationWithPointSize:15 weight:UIImageSymbolWeightMedium];
+    UIImageView *icon = [[UIImageView alloc] initWithImage:
+        [UIImage systemImageNamed:symbol withConfiguration:cfg]];
+    icon.tintColor = tint;
+    icon.contentMode = UIViewContentModeCenter;
+    [icon.widthAnchor constraintEqualToConstant:22].active = YES;
+
+    UILabel *titleLabel = [[UILabel alloc] init];
+    titleLabel.text = title;
+    titleLabel.font = [UIFont systemFontOfSize:14 weight:UIFontWeightSemibold];
+    titleLabel.textColor = UIColor.labelColor;
+
+    UILabel *subLabel = [[UILabel alloc] init];
+    subLabel.text = sub;
+    subLabel.font = [UIFont systemFontOfSize:11 weight:UIFontWeightRegular];
+    subLabel.textColor = UIColor.secondaryLabelColor;
+
+    UIStackView *text = [[UIStackView alloc] initWithArrangedSubviews:@[titleLabel, subLabel]];
+    text.axis = UILayoutConstraintAxisVertical;
+    text.spacing = 0;
+
+    UIStackView *row = [[UIStackView alloc] initWithArrangedSubviews:@[icon, text]];
+    row.axis = UILayoutConstraintAxisHorizontal;
+    row.alignment = UIStackViewAlignmentCenter;
+    row.spacing = 9;
+    row.userInteractionEnabled = NO;
+    row.translatesAutoresizingMaskIntoConstraints = NO;
+    return row;
+}
+
+// Nền xám nhạt khi đang chạm vào hàng
+static void AutoACAddHighlight(UIButton *button) {
+    __weak UIButton *weakButton = button;
+    UIColor *highlight = [UIColor.labelColor colorWithAlphaComponent:0.08];
+    [button addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+        weakButton.backgroundColor = highlight;
+    }] forControlEvents:UIControlEventTouchDown | UIControlEventTouchDragEnter];
+    [button addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+        weakButton.backgroundColor = UIColor.clearColor;
+    }] forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside |
+                        UIControlEventTouchCancel | UIControlEventTouchDragExit];
+}
+
+static void AutoACShowMenu(CGPoint anchor) {
     UIWindow *window = AutoACKeyWindow();
     if (!window || gMenu) return;
 
-    // Nền mờ toàn màn hình: chạm ra ngoài để đóng
+    const CGFloat cardWidth = 200;
+    const CGFloat rowHeight = 44;
+    CGFloat leadingConstant = MIN(MAX(anchor.x - 24, 12), CGRectGetWidth(window.bounds) - cardWidth - 12);
+    CGFloat topConstant = anchor.y + 24;
+
+    // Nền trong suốt: chạm ra ngoài để đóng
     UIButton *backdrop = [UIButton buttonWithType:UIButtonTypeCustom];
     backdrop.frame = window.bounds;
     backdrop.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-    backdrop.backgroundColor = [UIColor colorWithWhite:0 alpha:0.18];
+    backdrop.backgroundColor = UIColor.clearColor;
     [backdrop addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
         AutoACDismissMenu();
     }] forControlEvents:UIControlEventTouchUpInside];
 
-    // Thẻ menu: kính mờ + bóng
+    // Thẻ nhỏ: kính mờ + bóng nhẹ
     UIView *card = [[UIView alloc] init];
     card.translatesAutoresizingMaskIntoConstraints = NO;
     card.layer.shadowColor = UIColor.blackColor.CGColor;
-    card.layer.shadowOpacity = 0.22;
-    card.layer.shadowRadius = 18;
-    card.layer.shadowOffset = CGSizeMake(0, 8);
+    card.layer.shadowOpacity = 0.18;
+    card.layer.shadowRadius = 14;
+    card.layer.shadowOffset = CGSizeMake(0, 5);
 
     UIVisualEffectView *blur = [[UIVisualEffectView alloc]
         initWithEffect:[UIBlurEffect effectWithStyle:UIBlurEffectStyleSystemThinMaterial]];
     blur.translatesAutoresizingMaskIntoConstraints = NO;
-    blur.layer.cornerRadius = 22;
+    blur.layer.cornerRadius = 16;
     blur.layer.cornerCurve = kCACornerCurveContinuous;
     blur.clipsToBounds = YES;
     [card addSubview:blur];
 
-    // Hàng 1: tiêu đề
-    UIImageSymbolConfiguration *cfg =
-        [UIImageSymbolConfiguration configurationWithPointSize:20 weight:UIImageSymbolWeightSemibold];
-    UIImageView *headIcon = [[UIImageView alloc] initWithImage:
-        [UIImage systemImageNamed:@"sparkles" withConfiguration:cfg]];
-    headIcon.tintColor = UIColor.systemYellowColor;
-    UILabel *headLabel = [[UILabel alloc] init];
-    headLabel.text = @"AutoAC";
-    headLabel.font = [UIFont systemFontOfSize:17 weight:UIFontWeightBold];
-    headLabel.textColor = UIColor.labelColor;
-    UIStackView *headRow = [[UIStackView alloc] initWithArrangedSubviews:@[headIcon, headLabel]];
-    headRow.axis = UILayoutConstraintAxisHorizontal;
-    headRow.alignment = UIStackViewAlignmentCenter;
-    headRow.spacing = 8;
+    NSMutableArray<UIView *> *arranged = [NSMutableArray array];
+    NSMutableArray<NSLayoutConstraint *> *constraints = [NSMutableArray array];
 
-    // Hàng 2: công tắc tự dọn khi mở app
-    UILabel *swTitle = [[UILabel alloc] init];
-    swTitle.text = @"Xoá cache tự động";
-    swTitle.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
-    swTitle.textColor = UIColor.labelColor;
-    UILabel *swSub = [[UILabel alloc] init];
-    swSub.text = @"Tự dọn khi mở app";
-    swSub.font = [UIFont systemFontOfSize:12 weight:UIFontWeightRegular];
-    swSub.textColor = UIColor.secondaryLabelColor;
-    UIStackView *swText = [[UIStackView alloc] initWithArrangedSubviews:@[swTitle, swSub]];
-    swText.axis = UILayoutConstraintAxisVertical;
-    swText.spacing = 2;
+    // Dòng chú thích nhỏ: tên + version build (để biết đang chạy bản nào)
+    NSString *tag = AutoACVersionTag();
+    if (tag.length > 0) {
+        UIView *captionWrap = [[UIView alloc] init];
+        captionWrap.translatesAutoresizingMaskIntoConstraints = NO;
+        UILabel *caption = [[UILabel alloc] init];
+        caption.translatesAutoresizingMaskIntoConstraints = NO;
+        caption.text = [NSString stringWithFormat:@"AutoAC  ·  %@", tag];
+        caption.font = [UIFont systemFontOfSize:10.5 weight:UIFontWeightMedium];
+        caption.textColor = UIColor.tertiaryLabelColor;
+        [captionWrap addSubview:caption];
+        [constraints addObjectsFromArray:@[
+            [captionWrap.heightAnchor constraintEqualToConstant:24],
+            [caption.leadingAnchor constraintEqualToAnchor:captionWrap.leadingAnchor constant:14],
+            [caption.bottomAnchor constraintEqualToAnchor:captionWrap.bottomAnchor constant:-2],
+        ]];
+        [arranged addObject:captionWrap];
+    }
+
+    // Hàng 1: công tắc tự động dọn khi mở app
+    UIView *autoRow = [[UIView alloc] init];
+    autoRow.translatesAutoresizingMaskIntoConstraints = NO;
+
+    UIButton *autoButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    autoButton.translatesAutoresizingMaskIntoConstraints = NO;
+    AutoACAddHighlight(autoButton);
+
+    UIStackView *autoStack = AutoACRowStack(@"arrow.triangle.2.circlepath", UIColor.systemGreenColor,
+                                            @"Tự động dọn", @"Khi mở app");
 
     UISwitch *toggle = [[UISwitch alloc] init];
+    toggle.translatesAutoresizingMaskIntoConstraints = NO;
     toggle.onTintColor = UIColor.systemGreenColor;
     toggle.on = [kPrefs boolForKey:kAutoClearCacheKey];
+    toggle.transform = CGAffineTransformMakeScale(0.75, 0.75);
     __weak UISwitch *weakToggle = toggle;
     [toggle addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
         [kPrefs setBool:weakToggle.isOn forKey:kAutoClearCacheKey];
         [[UISelectionFeedbackGenerator new] selectionChanged];
     }] forControlEvents:UIControlEventValueChanged];
 
-    UIStackView *swRow = [[UIStackView alloc] initWithArrangedSubviews:@[swText, toggle]];
-    swRow.axis = UILayoutConstraintAxisHorizontal;
-    swRow.alignment = UIStackViewAlignmentCenter;
-    swRow.spacing = 12;
+    // Chạm vào cả hàng cũng bật/tắt công tắc
+    [autoButton addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
+        UISwitch *strongToggle = weakToggle;
+        if (!strongToggle) return;
+        [strongToggle setOn:!strongToggle.isOn animated:YES];
+        [kPrefs setBool:strongToggle.isOn forKey:kAutoClearCacheKey];
+        [[UISelectionFeedbackGenerator new] selectionChanged];
+    }] forControlEvents:UIControlEventTouchUpInside];
 
-    // Hàng 3: nút dọn ngay
-    UIButton *cleanButton = [UIButton buttonWithType:UIButtonTypeSystem];
-    [cleanButton setTitle:@"🧹  Dọn cache ngay" forState:UIControlStateNormal];
-    cleanButton.titleLabel.font = [UIFont systemFontOfSize:15 weight:UIFontWeightSemibold];
-    cleanButton.backgroundColor = [UIColor.systemBlueColor colorWithAlphaComponent:0.14];
-    cleanButton.layer.cornerRadius = 12;
-    cleanButton.layer.cornerCurve = kCACornerCurveContinuous;
-    [cleanButton.heightAnchor constraintEqualToConstant:44].active = YES;
+    [autoRow addSubview:autoButton];
+    [autoRow addSubview:autoStack];
+    [autoRow addSubview:toggle];
+    [arranged addObject:autoRow];
+
+    // Đường kẻ mảnh giữa hai hàng
+    UIView *separatorWrap = [[UIView alloc] init];
+    separatorWrap.translatesAutoresizingMaskIntoConstraints = NO;
+    UIView *separator = [[UIView alloc] init];
+    separator.translatesAutoresizingMaskIntoConstraints = NO;
+    separator.backgroundColor = UIColor.separatorColor;
+    [separatorWrap addSubview:separator];
+    [arranged addObject:separatorWrap];
+
+    // Hàng 2: dọn cache thủ công
+    UIButton *cleanButton = [UIButton buttonWithType:UIButtonTypeCustom];
+    cleanButton.translatesAutoresizingMaskIntoConstraints = NO;
+    AutoACAddHighlight(cleanButton);
+    UIStackView *cleanStack = AutoACRowStack(@"trash", UIColor.systemBlueColor,
+                                             @"Dọn ngay", @"Xoá cache thủ công");
+    [cleanButton addSubview:cleanStack];
     [cleanButton addAction:[UIAction actionWithHandler:^(__kindof UIAction *action) {
         AutoACDismissMenu();
         AutoACRunCleanup();
     }] forControlEvents:UIControlEventTouchUpInside];
+    [arranged addObject:cleanButton];
 
-    UIStackView *column = [[UIStackView alloc] initWithArrangedSubviews:@[headRow, swRow, cleanButton]];
+    UIStackView *column = [[UIStackView alloc] initWithArrangedSubviews:arranged];
     column.axis = UILayoutConstraintAxisVertical;
-    column.spacing = 16;
+    column.spacing = 0;
     column.translatesAutoresizingMaskIntoConstraints = NO;
     [blur.contentView addSubview:column];
 
@@ -329,33 +407,57 @@ static void AutoACShowMenu(void) {
     [window addSubview:backdrop];
     gMenu = backdrop;
 
-    NSLayoutConstraint *widthConstraint = [card.widthAnchor constraintEqualToConstant:300];
-    widthConstraint.priority = UILayoutPriorityDefaultHigh;
-
-    [NSLayoutConstraint activateConstraints:@[
+    [constraints addObjectsFromArray:@[
+        // Thẻ
+        [card.widthAnchor constraintEqualToConstant:cardWidth],
+        [card.leadingAnchor constraintEqualToAnchor:backdrop.leadingAnchor constant:leadingConstant],
+        [card.topAnchor constraintEqualToAnchor:backdrop.topAnchor constant:topConstant],
         [blur.topAnchor constraintEqualToAnchor:card.topAnchor],
         [blur.bottomAnchor constraintEqualToAnchor:card.bottomAnchor],
         [blur.leadingAnchor constraintEqualToAnchor:card.leadingAnchor],
         [blur.trailingAnchor constraintEqualToAnchor:card.trailingAnchor],
 
-        [column.topAnchor constraintEqualToAnchor:blur.contentView.topAnchor constant:18],
-        [column.bottomAnchor constraintEqualToAnchor:blur.contentView.bottomAnchor constant:-18],
-        [column.leadingAnchor constraintEqualToAnchor:blur.contentView.leadingAnchor constant:18],
-        [column.trailingAnchor constraintEqualToAnchor:blur.contentView.trailingAnchor constant:-18],
+        // Danh sách
+        [column.topAnchor constraintEqualToAnchor:blur.contentView.topAnchor constant:4],
+        [column.bottomAnchor constraintEqualToAnchor:blur.contentView.bottomAnchor constant:-4],
+        [column.leadingAnchor constraintEqualToAnchor:blur.contentView.leadingAnchor],
+        [column.trailingAnchor constraintEqualToAnchor:blur.contentView.trailingAnchor],
 
-        // Thả ngay dưới logo, góc trái
-        [card.topAnchor constraintEqualToAnchor:backdrop.safeAreaLayoutGuide.topAnchor constant:56],
-        [card.leadingAnchor constraintEqualToAnchor:backdrop.safeAreaLayoutGuide.leadingAnchor constant:16],
-        [card.trailingAnchor constraintLessThanOrEqualToAnchor:backdrop.trailingAnchor constant:-16],
-        widthConstraint,
+        // Hàng tự động
+        [autoRow.heightAnchor constraintEqualToConstant:rowHeight],
+        [autoButton.topAnchor constraintEqualToAnchor:autoRow.topAnchor],
+        [autoButton.bottomAnchor constraintEqualToAnchor:autoRow.bottomAnchor],
+        [autoButton.leadingAnchor constraintEqualToAnchor:autoRow.leadingAnchor],
+        [autoButton.trailingAnchor constraintEqualToAnchor:autoRow.trailingAnchor],
+        [autoStack.leadingAnchor constraintEqualToAnchor:autoRow.leadingAnchor constant:14],
+        [autoStack.centerYAnchor constraintEqualToAnchor:autoRow.centerYAnchor],
+        [autoStack.trailingAnchor constraintLessThanOrEqualToAnchor:toggle.leadingAnchor constant:-4],
+        [toggle.trailingAnchor constraintEqualToAnchor:autoRow.trailingAnchor constant:-8],
+        [toggle.centerYAnchor constraintEqualToAnchor:autoRow.centerYAnchor],
+
+        // Đường kẻ
+        [separatorWrap.heightAnchor constraintEqualToConstant:0.5],
+        [separator.topAnchor constraintEqualToAnchor:separatorWrap.topAnchor],
+        [separator.bottomAnchor constraintEqualToAnchor:separatorWrap.bottomAnchor],
+        [separator.leadingAnchor constraintEqualToAnchor:separatorWrap.leadingAnchor constant:14],
+        [separator.trailingAnchor constraintEqualToAnchor:separatorWrap.trailingAnchor],
+
+        // Hàng dọn ngay
+        [cleanButton.heightAnchor constraintEqualToConstant:rowHeight],
+        [cleanStack.leadingAnchor constraintEqualToAnchor:cleanButton.leadingAnchor constant:14],
+        [cleanStack.trailingAnchor constraintLessThanOrEqualToAnchor:cleanButton.trailingAnchor constant:-14],
+        [cleanStack.centerYAnchor constraintEqualToAnchor:cleanButton.centerYAnchor],
     ]];
+    [NSLayoutConstraint activateConstraints:constraints];
     [window layoutIfNeeded];
 
+    // Mở ra như popover: phóng nhẹ từ góc trên-trái
     backdrop.alpha = 0;
-    card.transform = CGAffineTransformMakeTranslation(0, -10);
-    [UIView animateWithDuration:0.35
+    card.transform = CGAffineTransformConcat(CGAffineTransformMakeScale(0.9, 0.9),
+                                             CGAffineTransformMakeTranslation(-8, -6));
+    [UIView animateWithDuration:0.3
                           delay:0
-         usingSpringWithDamping:0.82
+         usingSpringWithDamping:0.85
           initialSpringVelocity:0.5
                         options:UIViewAnimationOptionCurveEaseOut
                      animations:^{
@@ -366,76 +468,152 @@ static void AutoACShowMenu(void) {
     [[UIImpactFeedbackGenerator new] impactOccurred];
 }
 
-#pragma mark - Tìm logo trong thanh tiêu đề
+#pragma mark - Nhận diện nhấn giữ logo
 
-// Tìm view logo: tên class chứa "Logo" hoặc nhãn trợ năng là "YouTube" / "YouTube Premium"
-static UIView *AutoACFindLogoView(UIView *root) {
-    NSMutableArray<UIView *> *queue = [NSMutableArray arrayWithObject:root];
-    while (queue.count > 0) {
-        UIView *v = queue.firstObject;
-        [queue removeObjectAtIndex:0];
-        if (v != root) {
-            NSString *cls = NSStringFromClass(v.class);
-            NSString *label = v.accessibilityLabel;
-            if ([cls rangeOfString:@"Logo" options:NSCaseInsensitiveSearch].location != NSNotFound ||
-                [label isEqualToString:@"YouTube"] ||
-                [label isEqualToString:@"YouTube Premium"]) {
-                return v;
-            }
-        }
-        [queue addObjectsFromArray:v.subviews];
-    }
-    return nil;
+static BOOL AutoACViewIsLogo(UIView *v) {
+    NSString *cls = NSStringFromClass(v.class);
+    if ([cls rangeOfString:@"Logo" options:NSCaseInsensitiveSearch].location != NSNotFound) return YES;
+    NSString *label = v.accessibilityLabel;
+    return [label isEqualToString:@"YouTube"] || [label isEqualToString:@"YouTube Premium"];
 }
 
-static BOOL gLogoAttached = NO;
-
-#pragma mark - Hook logo YouTube
-
-%hook YTHeaderView
-
-- (void)layoutSubviews {
-    %orig;
-
-    // Mỗi thanh tiêu đề chỉ gắn một lần
-    if (!objc_getAssociatedObject(self, @selector(autoAC_handleLogoLongPress:))) {
-
-        UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc]
-            initWithTarget:self
-                    action:@selector(autoAC_handleLogoLongPress:)];
-
-        lp.minimumPressDuration = 0.45;
-        lp.cancelsTouchesInView = NO; // Không làm liệt các nút bấm khác
-
-        [self addGestureRecognizer:lp];
-
-        objc_setAssociatedObject(self,
-                                 @selector(autoAC_handleLogoLongPress:),
-                                 @(YES),
-                                 OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-        gLogoAttached = YES;
+// Điểm chạm có nằm trên logo không?
+// 1) Lần theo chuỗi view tại điểm chạm, tìm view tên "Logo" hoặc nhãn "YouTube".
+// 2) Không nhận ra thì coi vùng góc trên-trái (ngay dưới tai thỏ) là logo.
+static BOOL AutoACPointIsOnLogo(UIWindow *window, CGPoint point) {
+    UIView *hit = [window hitTest:point withEvent:nil];
+    for (UIView *v = hit; v && v != window; v = v.superview) {
+        if (AutoACViewIsLogo(v)) return YES;
     }
+    CGFloat top = MAX(window.safeAreaInsets.top, 20);
+    return point.y >= top - 8 &&
+           point.y <= top + 64 &&
+           point.x <= CGRectGetWidth(window.bounds) * 0.5;
 }
 
-%new
-- (void)autoAC_handleLogoLongPress:(UILongPressGestureRecognizer *)gesture {
+#pragma mark - Cơ chế 1: cử chỉ nhấn giữ trên cửa sổ
+
+@interface AutoACGestureHandler : NSObject <UIGestureRecognizerDelegate>
++ (instancetype)shared;
+- (void)handleLongPress:(UILongPressGestureRecognizer *)gesture;
+@end
+
+@implementation AutoACGestureHandler
+
++ (instancetype)shared {
+    static AutoACGestureHandler *instance = nil;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{ instance = [[AutoACGestureHandler alloc] init]; });
+    return instance;
+}
+
+// Chỉ "nhận" cử chỉ khi nhấn giữ đúng vùng logo.
+// Nhấn giữ chỗ khác thì cử chỉ tự thất bại, không phá các tính năng nhấn giữ của YouTube.
+- (BOOL)gestureRecognizerShouldBegin:(UIGestureRecognizer *)gestureRecognizer {
+    UIWindow *window = (UIWindow *)gestureRecognizer.view;
+    if (![window isKindOfClass:UIWindow.class]) return NO;
+    return AutoACPointIsOnLogo(window, [gestureRecognizer locationInView:window]);
+}
+
+- (BOOL)gestureRecognizer:(UIGestureRecognizer *)gestureRecognizer
+shouldRecognizeSimultaneouslyWithGestureRecognizer:(UIGestureRecognizer *)other {
+    return YES;
+}
+
+- (void)handleLongPress:(UILongPressGestureRecognizer *)gesture {
     if (gesture.state != UIGestureRecognizerStateBegan) return;
+    UIWindow *window = (UIWindow *)gesture.view;
+    if (![window isKindOfClass:UIWindow.class]) return;
+    AutoACShowMenu([gesture locationInView:window]);
+}
 
-    CGPoint point = [gesture locationInView:self];
-    UIView *logo = AutoACFindLogoView(self);
+@end
 
-    BOOL hit;
-    if (logo) {
-        // Trúng logo (nới thêm vùng chạm cho dễ bấm)
-        CGRect frame = [self convertRect:logo.bounds fromView:logo];
-        hit = CGRectContainsPoint(CGRectInset(frame, -16, -12), point);
-    } else {
-        // Không nhận ra view logo: coi 40% bên trái thanh tiêu đề là vùng logo
-        hit = point.x < CGRectGetWidth(self.bounds) * 0.4;
+static const char kAutoACAttachedKey = 0;
+
+static void AutoACAttachToWindow(UIWindow *window) {
+    if (!window || objc_getAssociatedObject(window, &kAutoACAttachedKey)) return;
+
+    UILongPressGestureRecognizer *lp = [[UILongPressGestureRecognizer alloc]
+        initWithTarget:[AutoACGestureHandler shared]
+                action:@selector(handleLongPress:)];
+    lp.delegate = [AutoACGestureHandler shared];
+    lp.minimumPressDuration = 0.45;
+    lp.allowableMovement = 12;
+    lp.cancelsTouchesInView = YES;   // nhấn giữ xong thì nút logo không bị kích hoạt khi nhả tay
+    lp.delaysTouchesBegan = NO;
+    lp.delaysTouchesEnded = NO;
+    [window addGestureRecognizer:lp];
+
+    objc_setAssociatedObject(window, &kAutoACAttachedKey, @(YES), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+}
+
+#pragma mark - Cơ chế 2 (dự phòng): đếm giờ ngay trong sendEvent
+
+static __weak UIWindow *gPressWindow = nil;
+static CGPoint gPressStart;
+static NSUInteger gPressToken = 0;
+
+static void AutoACCancelPress(void) {
+    gPressToken++;
+    gPressWindow = nil;
+}
+
+%hook UIWindow
+
+- (void)becomeKeyWindow {
+    %orig;
+    AutoACAttachToWindow(self);
+}
+
+- (void)sendEvent:(UIEvent *)event {
+    %orig;
+    if (event.type != UIEventTypeTouches) return;
+
+    NSSet<UITouch *> *touches = [event touchesForWindow:self];
+    if (touches.count != 1) {
+        if (gPressWindow == self) AutoACCancelPress();
+        return;
     }
 
-    if (hit) AutoACShowMenu();
+    UITouch *touch = touches.anyObject;
+    CGPoint point = [touch locationInView:self];
+
+    switch (touch.phase) {
+        case UITouchPhaseBegan: {
+            AutoACCancelPress();
+            if (gMenu || !AutoACPointIsOnLogo(self, point)) break;
+
+            gPressWindow = self;
+            gPressStart = point;
+            NSUInteger token = gPressToken;
+            CGPoint start = point;
+            __weak UIWindow *weakSelf = self;
+            // 0.7s: sau cơ chế 1 (0.45s). Nếu menu đã mở thì bỏ qua.
+            dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.7 * NSEC_PER_SEC)),
+                           dispatch_get_main_queue(), ^{
+                UIWindow *w = weakSelf;
+                if (!w || token != gPressToken || gPressWindow != w || gMenu) return;
+                AutoACCancelPress();
+                AutoACShowMenu(start);
+            });
+            break;
+        }
+        case UITouchPhaseMoved:
+            if (gPressWindow == self &&
+                hypot(point.x - gPressStart.x, point.y - gPressStart.y) > 12) {
+                AutoACCancelPress();
+            }
+            break;
+        case UITouchPhaseEnded:
+        case UITouchPhaseCancelled:
+            if (gPressWindow == self) AutoACCancelPress();
+            break;
+        default:
+            break;
+    }
 }
+
 %end
 
 #pragma mark - Fix Promo
@@ -443,34 +621,6 @@ static BOOL gLogoAttached = NO;
 %hook YTCommerceEventGroupHandler
 - (void)addEventHandlers {}
 %end
-
-#pragma mark - Chẩn đoán nếu không gắn được vào logo
-
-// Gom tên các class YT* nằm ở dải trên cùng màn hình để biết thanh tiêu đề tên gì
-static void AutoACCollectTopClasses(UIView *view, UIWindow *window, CGFloat maxY,
-                                    NSMutableOrderedSet<NSString *> *out) {
-    if (out.count >= 10 || view.hidden) return;
-    CGRect rect = [view convertRect:view.bounds toView:window];
-    if (CGRectIsEmpty(rect) || rect.origin.y > maxY || CGRectGetMaxY(rect) < 0) return;
-
-    NSString *name = NSStringFromClass(view.class);
-    if ([name hasPrefix:@"YT"]) [out addObject:name];
-    for (UIView *sub in view.subviews) AutoACCollectTopClasses(sub, window, maxY, out);
-}
-
-static void AutoACReportIfLogoMissing(void) {
-    if (gLogoAttached) return;
-    UIWindow *window = AutoACKeyWindow();
-    if (!window) return;
-
-    NSMutableOrderedSet<NSString *> *names = [NSMutableOrderedSet orderedSet];
-    AutoACCollectTopClasses(window, window, window.safeAreaInsets.top + 70, names);
-    NSString *sub = names.count > 0
-        ? [names.array componentsJoinedByString:@", "]
-        : @"Không đọc được view nào";
-    AutoACShowHub(@"questionmark.circle.fill", UIColor.systemOrangeColor,
-                  @"Chưa gắn được vào logo", sub, 10);
-}
 
 #pragma mark - Tự động dọn khi mở app
 
@@ -497,18 +647,14 @@ static void AutoACAutoCleanOnce(void) {
                     object:nil
                      queue:NSOperationQueue.mainQueue
                 usingBlock:^(NSNotification *note) {
+        AutoACAttachToWindow(AutoACKeyWindow());
         AutoACAutoCleanOnce();
     }];
 
     // Phòng khi app đã active trước lúc dylib nạp xong
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(8.0 * NSEC_PER_SEC)),
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(6.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
+        AutoACAttachToWindow(AutoACKeyWindow());
         AutoACAutoCleanOnce();
-    });
-
-    // Sau 15 giây vẫn chưa gắn được vào thanh tiêu đề thì báo kèm tên class để sửa
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(15.0 * NSEC_PER_SEC)),
-                   dispatch_get_main_queue(), ^{
-        AutoACReportIfLogoMissing();
     });
 }
