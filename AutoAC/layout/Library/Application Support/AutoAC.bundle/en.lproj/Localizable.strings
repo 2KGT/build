@@ -30,7 +30,7 @@
 "Chất lượng video" = "Video quality";
 "Chặn popup mời mua Premium" = "Block Premium upsell popups";
 "Chặn quảng cáo" = "Block ads";
-"Chặn quảng cáo trong video, trang chủ và Shorts (YouTube X). Cần mở lại app." = "Blocks ads in videos, the home feed and Shorts (YouTube X). Restart the app to apply.";
+"Chặn quảng cáo trong video, trang chủ và Shorts, kèm ẩn sản phẩm bán hàng và giỏ hàng (YouTube X). Cần mở lại app." = "Blocks ads in videos, the home feed and Shorts, and hides shopping products and carts (YouTube X). Restart the app to apply.";
 "Chế độ OLED" = "OLED mode";
 "Chỉ chữ" = "Text only";
 "Chọn chất lượng" = "Choose quality";
@@ -249,7 +249,7 @@
 "bản %@ · iOS %@ · %@\n" = "build %@ · iOS %@ · %@\n";
 "bật" = "on";
 "chưa gắn" = "not attached";
-"chặn quảng cáo, ẩn popup Premium, Sponsor block" = "ad blocking, hide Premium popups, Sponsor block";
+"chặn quảng cáo, ẩn sản phẩm bán hàng và giỏ hàng, ẩn popup Premium, Sponsor block" = "ad blocking, hide shopping products and carts, hide Premium popups, Sponsor block";
 "cài đặt" = "settings";
 "có" = "yes";
 "cửa sổ %.0f×%.0f · vùng an toàn T%.0f D%.0f Tr%.0f Ph%.0f\n" = "window %.0f×%.0f · safe area T%.0f B%.0f L%.0f R%.0f\n";
