@@ -16,7 +16,7 @@
 #import "BuildInfo.h"
 #endif
 #ifndef TWEAK_BUILD_VERSION
-#define TWEAK_BUILD_VERSION @"2.1.29"
+#define TWEAK_BUILD_VERSION @"2.1.30"
 #endif
 #ifndef TWEAK_UPSTREAM_COUNT
 #define TWEAK_UPSTREAM_COUNT 0
@@ -44,7 +44,7 @@ typedef id (^AutoACHookMaker)(IMP original, SEL selector);
 static BOOL AutoACHook(NSString *className, NSString *selectorName, BOOL classMethod,
                        const char *prefix, AutoACHookMaker maker);
 
-static NSString *const kCurrentBuildID = @"2.1.29";
+static NSString *const kCurrentBuildID = @"2.1.30";
 
 // ── Nhật ký lỗi: ghi dấu vết và nguyên nhân crash vào Documents/AutoAC_crash.log ──
 static int gTraceFD = -1;
@@ -115,7 +115,7 @@ static void AutoACSetupTrace(void) {
     [[NSNotificationCenter defaultCenter] addObserverForName:UIApplicationDidBecomeActiveNotification
         object:nil queue:nil usingBlock:^(NSNotification *n) { AutoACTrace("active"); AutoACInstallCrashHandlers(); }];
     atexit(AutoACAtExit);
-    AutoACTrace("start " "v2.1.29");
+    AutoACTrace("start " "v2.1.30");
 }
 static NSString *const kAutoClearCacheKey = @"kAutoClearCache2";
 static NSString *const kHideShortsKey = @"kHideShortsTab";
@@ -6733,7 +6733,7 @@ static NSArray<AutoACItem *> *AutoACBuildItems(void) {
         AutoACT(@"Tiếp tục phát khi thoát app hoặc tắt màn hình (YouTube X). Cần mở lại app."), restart)];
     [items addObject:ACSwitch(AutoACT(@"Quảng cáo"), AutoACT(@"Chặn quảng cáo"), AutoACT(@"Video, trang chủ, Shorts"), @"shield.lefthalf.filled",
         UIColor.systemRedColor, kYTXAdsKey,
-        AutoACT(@"Chặn quảng cáo trong video, trang chủ và Shorts (YouTube X). Cần mở lại app."), restart)];
+        AutoACT(@"Chặn quảng cáo trong video, trang chủ và Shorts, kèm ẩn sản phẩm bán hàng và giỏ hàng (YouTube X). Cần mở lại app."), restart)];
 #endif
 
     [items addObject:ACSwitch(AutoACT(@"Phát lại"), AutoACT(@"Nút tốc độ"), AutoACT(@"Dưới nút bánh răng"), @"speedometer",
@@ -7324,7 +7324,7 @@ static UIStackView *AutoACBuildInfoPage(NSArray<AutoACItem *> *items) {
         @[AutoACT(@"Bộ nhớ"), AutoACT(@"tự dọn cache khi mở app")],
         @[AutoACT(@"Giao diện"), AutoACT(@"OLED, thanh tab Glass, thêm và sắp xếp tab, ẩn hiệu ứng mở, bài đăng, Mix, Short ở trang chủ")],
         @[AutoACT(@"Phát lại"), AutoACT(@"tốc độ, PiP, tự thử lại khi lỗi, tắt tự động phát, tắt lặp và tắt cuộn Short")],
-        @[AutoACT(@"Quảng cáo"), AutoACT(@"chặn quảng cáo, ẩn popup Premium, Sponsor block")],
+        @[AutoACT(@"Quảng cáo"), AutoACT(@"chặn quảng cáo, ẩn sản phẩm bán hàng và giỏ hàng, ẩn popup Premium, Sponsor block")],
         @[@"Shorts", AutoACT(@"ẩn nút Thích, bình luận, chia sẻ, lưu, Remix, âm thanh, thẻ tạm dừng")],
         @[AutoACT(@"Tải xuống"), AutoACT(@"video, âm thanh, ảnh bìa, ảnh bài đăng, sao chép và dịch bình luận")],
     ];
@@ -8101,6 +8101,18 @@ static BOOL AutoACInShortsPlayer(UIView *view) {
     return NO;
 }
 
+// ── Chặn sản phẩm bán hàng và giỏ hàng (đi cùng công tắc Chặn quảng cáo) ──
+static BOOL AutoACShoppingOff(void) { return [kPrefs boolForKey:kYTXAdsKey]; }
+
+static BOOL AutoACIsShoppingText(NSString *low) {
+    if (low.length == 0) return NO;
+    for (NSString *needle in @[@"shopping", @"product_item", @"product_shelf", @"products_shelf", @"product_carousel", @"product_list",
+                               @"product_card", @"merch", @"shop_button", @"shopping_cart", @"cart_button", @"offer_item"]) {
+        if ([low containsString:needle]) return YES;
+    }
+    return NO;
+}
+
 static BOOL AutoACIsShortsShelfIdent(NSString *low) {
     for (NSString *needle in @[@"shorts-shelf", @"shorts-grid", @"shorts_shelf", @"reel_shelf", @"shorts_grid", @"shorts_lockup", @"shorts_video_cell",
                                @"shorts_carousel", @"reel_item_wrapper", @"inline_shorts", @"shorts_home"]) {
@@ -8121,6 +8133,12 @@ static void AutoACApplyContentRules(UIView *view) {
     AutoACAttachDownloadOverlay(view);
     NSString *ident = view.accessibilityIdentifier;
     if (ident.length == 0) return;
+    if (AutoACShoppingOff() && AutoACIsShoppingText(ident.lowercaseString)) {
+        AutoACSetOwnedHidden(view, YES);
+        UICollectionViewCell *shopCell = AutoACFeedCellOf(view);
+        if (shopCell && !AutoACInShortsPlayer(view)) AutoACSetOwnedHidden(shopCell, YES);   // ẩn cả hàng để không để lại khoảng trống
+        return;
+    }
     static NSDictionary<NSString *, NSString *> *rules;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
@@ -8175,6 +8193,10 @@ static void AutoACApplyContentRules(UIView *view) {
 static void AutoACInstallShortsShelfHooks(void) {
     AutoACHook(@"YTIElementRenderer", @"elementData", NO, "@16", ^id(IMP original, SEL selector) {
         return ^id(id self_) {
+            if (AutoACShoppingOff()) {
+                NSString *low = [[self_ description] lowercaseString];
+                if (AutoACIsShoppingText(low) && ![low containsString:@"history*"]) return nil;
+            }
             if ([kPrefs boolForKey:kHideShortsShelfKey] && !(gShortsOnScreenAt > 0 && CACurrentMediaTime() - gShortsOnScreenAt < 2.5)) {
                 NSString *d = [self_ description];
                 if (([d containsString:@"shorts_shelf.eml"] || [d containsString:@"shorts_video_cell.eml"] ||
@@ -8188,6 +8210,11 @@ static void AutoACInstallShortsShelfHooks(void) {
     AutoACHook(@"YTAsyncCollectionView", @"cellForItemAtIndexPath:", NO, "@", ^id(IMP original, SEL selector) {
         return ^id(id self_, NSIndexPath *indexPath) {
             UICollectionViewCell *cell = ((id (*)(id, SEL, id))original)(self_, selector, indexPath);
+            if (cell && AutoACShoppingOff() && !AutoACInShortsPlayer(cell) && [cell respondsToSelector:@selector(node)]) {
+                id node = ((id (*)(id, SEL))objc_msgSend)(cell, @selector(node));
+                NSString *nid = [node respondsToSelector:@selector(accessibilityIdentifier)] ? [node accessibilityIdentifier] : nil;
+                if (AutoACIsShoppingText(nid.lowercaseString)) { AutoACSetOwnedHidden(cell, YES); return cell; }
+            }
             if (cell && [kPrefs boolForKey:kHideShortsShelfKey]) {
                 if (AutoACInShortsPlayer(cell)) { AutoACSetOwnedHidden(cell, NO); return cell; }
                 BOOL shelf = [cell isKindOfClass:NSClassFromString(@"YTReelShelfCell")];
@@ -8494,8 +8521,37 @@ static void AutoACScanShortsColumn(UIView *view, UIWindow *w, int depth, NSMutab
     }
 }
 
+static NSHashTable<UIView *> *gShortsHosts = nil;
+static NSTimer *gShortsTimer = nil;
+static void AutoACEnsureShortsButton(UIView *host);
+
+// Độ lệch của lớp so với giữa màn hình (nhỏ hơn = đang là Short hiện tại)
+static CGFloat AutoACHostOffset(UIView *host, UIWindow *w) {
+    CGRect r = [host convertRect:host.bounds toView:w];
+    return fabs(CGRectGetMidY(r) - CGRectGetMidY(w.bounds)) + fabs(CGRectGetMidX(r) - CGRectGetMidX(w.bounds));
+}
+
+// Nhịp kiểm tra nhẹ: layoutSubviews không phải lúc nào cũng chạy sau khi cuộn sang Short mới,
+// nên nút có thể còn dính ở lớp Short cũ hoặc mất khi lớp đó bị tái sử dụng
+static void AutoACShortsTick(void) {
+    if (CACurrentMediaTime() - gShortsOnScreenAt > 8.0) { [gShortsTimer invalidate]; gShortsTimer = nil; return; }
+    UIView *best = nil; CGFloat bestOff = CGFLOAT_MAX;
+    for (UIView *h in gShortsHosts.allObjects) {
+        UIWindow *w = h.window;
+        if (!w || !AutoACHostIsOnScreen(h, w)) continue;
+        CGFloat off = AutoACHostOffset(h, w);
+        if (off < bestOff) { best = h; bestOff = off; }
+    }
+    if (best) AutoACEnsureShortsButton(best);
+}
+
 static void AutoACEnsureShortsButton(UIView *host) {
     if (!host) return;
+    if (!gShortsHosts) gShortsHosts = [NSHashTable weakObjectsHashTable];
+    [gShortsHosts addObject:host];
+    if (!gShortsTimer) {
+        gShortsTimer = [NSTimer scheduledTimerWithTimeInterval:0.5 repeats:YES block:^(NSTimer *t) { AutoACShortsTick(); }];
+    }
     UIWindow *w = host.window;   // nút tải trong Shorts luôn bật
     if (w && AutoACHostIsOnScreen(host, w)) {
         NSDate *last = objc_getAssociatedObject(host, &kAutoACSaveScanKey);
@@ -8520,18 +8576,20 @@ static void AutoACEnsureShortsButton(UIView *host) {
     if (!gShortsButton) gShortsButton = AutoACMakeFloatingButton(@"arrow.down.circle", 17, ^{ AutoACShortsTapped(); });
     UIView *current = gShortsButton.superview;
     if (current != host) {
-        if (current && AutoACHostIsOnScreen(current, w)) return;   // đã có lớp hợp lệ giữ nút
+        // Lớp cũ vẫn còn trên màn hình nhưng lớp mới gần giữa hơn (đang chuyển Short): chuyển nút sang lớp mới
+        if (current && current.window == w && AutoACHostIsOnScreen(current, w) &&
+            AutoACHostOffset(current, w) <= AutoACHostOffset(host, w) + 1.0) return;
         [host addSubview:gShortsButton];
     }
     UIEdgeInsets safe = w.safeAreaInsets;
     // Chưa quét được cột nút: đặt ở mép phải, khoảng giữa màn hình (vùng cột nút), tránh dải chip và tiêu đề phía trên
-    // Cùng cột với cột nút, dịch phải một chút; nằm dưới nút "…" khoảng 1,5 cm (≈ 96 điểm)
+    // Cùng cột với cột nút, dịch phải một chút; nằm dưới nút "…" khoảng 1,1 cm (≈ 70 điểm)
     CGFloat centerX = gColStamp > 0 ? gColCenterX : CGRectGetWidth(w.bounds) - safe.right - 52 + kFloatSize / 2;
     CGFloat moreBottom = gMoreBottomY > 0 ? gMoreBottomY : safe.top + 44;
-    CGFloat y = moreBottom + 96;
+    CGFloat y = moreBottom + 70;   // 96 trừ khoảng 26 điểm (≈ 0,4 cm) dịch lên
     if (gColStamp > 0) y = MIN(y, gColTopY - 4 - kFloatSize);   // không đè lên nút tim
     CGFloat maxX = CGRectGetWidth(w.bounds) - safe.right - 4 - kFloatSize;
-    CGPoint target = CGPointMake(MIN(centerX + 6 - kFloatSize / 2, maxX), y);
+    CGPoint target = CGPointMake(MIN(centerX + 3 - kFloatSize / 2, maxX), y);   // dịch phải 3 điểm (bớt 3 so với trước)
     CGPoint p = [host convertPoint:target fromView:w];
     CGRect frame = CGRectMake(round(p.x), round(p.y), kFloatSize, kFloatSize);
     if (!CGRectEqualToRect(gShortsButton.frame, frame)) gShortsButton.frame = frame;
@@ -9586,7 +9644,7 @@ static NSDictionary<NSString *, NSString *> *AutoACEnglishTable(void) {
         @"Chất lượng video": @"Video quality",
         @"Chặn popup mời mua Premium": @"Block Premium upsell popups",
         @"Chặn quảng cáo": @"Block ads",
-        @"Chặn quảng cáo trong video, trang chủ và Shorts (YouTube X). Cần mở lại app.": @"Blocks ads in videos, the home feed and Shorts (YouTube X). Restart the app to apply.",
+        @"Chặn quảng cáo trong video, trang chủ và Shorts, kèm ẩn sản phẩm bán hàng và giỏ hàng (YouTube X). Cần mở lại app.": @"Blocks ads in videos, the home feed and Shorts, and hides shopping products and carts (YouTube X). Restart the app to apply.",
         @"Chế độ OLED": @"OLED mode",
         @"Chỉ chữ": @"Text only",
         @"Chọn chất lượng": @"Choose quality",
@@ -9789,7 +9847,7 @@ static NSDictionary<NSString *, NSString *> *AutoACEnglishTable(void) {
         @"bản %@ · iOS %@ · %@\n": @"build %@ · iOS %@ · %@\n",
         @"bật": @"on",
         @"chưa gắn": @"not attached",
-        @"chặn quảng cáo, ẩn popup Premium, Sponsor block": @"ad blocking, hide Premium popups, Sponsor block",
+        @"chặn quảng cáo, ẩn sản phẩm bán hàng và giỏ hàng, ẩn popup Premium, Sponsor block": @"ad blocking, hide shopping products and carts, hide Premium popups, Sponsor block",
         @"cài đặt": @"settings",
         @"có": @"yes",
         @"cửa sổ %.0f×%.0f · vùng an toàn T%.0f D%.0f Tr%.0f Ph%.0f\n": @"window %.0f×%.0f · safe area T%.0f B%.0f L%.0f R%.0f\n",
