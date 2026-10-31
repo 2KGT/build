@@ -1,0 +1,63 @@
+# ==========================================
+# 🛑 CHẶN TOÀN BỘ FILE THÀNH PHẨM (Vì đây là repo chỉ để build)
+# ==========================================
+# Cấm đẩy file cài đặt lên repo này để tránh nặng và rác repo
+*.deb
+*.ipa
+*.zip
+*.tar*
+*.gz
+
+# Chặn các file danh sách nguồn (Nếu có phát sinh lúc test script)
+Packages*
+Release*
+apps.json
+
+# ==========================================
+# 🛑 BIẾN TẠM & RÁC HỆ THỐNG PYTHON (Trong .github/scripts)
+# ==========================================
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.Python
+env/
+venv/
+ENV/
+
+# ==========================================
+# 🛑 TỆP TIN TẠM PHÁT SINH KHI CHẠY SCRIPT
+# ==========================================
+temp_*
+*.tmp
+*.bak
+control.tar*
+data.tar*
+debian-binary
+
+# ==========================================
+# 🛠️ CHẶN RÁC PHÁT SINH KHI BUILD TWEAK & APP
+# ==========================================
+# Rác của bộ công cụ Theos khi gõ lệnh compile Tweak
+.theos/
+obj/
+
+# Rác của Xcode khi compile App IPA
+build/
+DerivedData/
+*.xcodeproj/*
+!*.xcodeproj/project.pbxproj
+*.xcworkspace/*
+!*.xcworkspace/contents.xcworkspacedata
+*.log
+
+# ==========================================
+# 🛑 DỮ LIỆU ĐẶC THÙ CỦA MACOS / WINDOWS
+# ==========================================
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db

@@ -1,0 +1,40 @@
+{
+  "AutoAC": [
+    {
+      "name": "YouTubeX",
+      "title": "YouTube X",
+      "repo": "https://github.com/PoomSmart/YouTube-X",
+      "ref": "main",
+      "source": [
+        "Tweak.x"
+      ],
+      "toggles": [
+        {
+          "key": "kYTXBackground",
+          "default": true,
+          "classes": [
+            "YTIPlayabilityStatus",
+            "MLVideo",
+            "YTIBackgroundOfflineSettingCategoryEntryRenderer"
+          ]
+        },
+        {
+          "key": "kYTXAds",
+          "default": true
+        }
+      ]
+    },
+    {
+      "name": "NoYTPremium",
+      "title": "NoYTPremium",
+      "repo": "https://github.com/PoomSmart/NoYTPremium",
+      "ref": "main"
+    },
+    {
+      "name": "YTNoPaidPromo",
+      "title": "YTNoPaidPromo",
+      "repo": "https://github.com/PoomSmart/YTNoPaidPromo",
+      "ref": "main"
+    }
+  ]
+}

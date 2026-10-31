@@ -1,0 +1,63 @@
+name: "Vạn Class quy tụ"
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: 'Dán Link IPA'
+        required: true
+      folder_name:
+        description: 'Tên thư mục con trong headers/ (Vd: YouTubeHeader)'
+        required: true
+        default: 'YouTubeHeader'
+
+jobs:
+  refine_process:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    
+    steps:
+      - name: 📥 Checkout Repo
+        uses: actions/checkout@v4
+
+      - name: 🚚 Bốc vác & Xẻ thịt
+        run: |
+          mkdir -p src/refinery/staging
+          # Gắn gốc headers/ với tên thư mục ông giáo nhập
+          OUT_DIR="headers/${{ github.event.inputs.folder_name }}"
+          mkdir -p "$OUT_DIR"
+          
+          curl -L "${{ github.event.inputs.ipa_url }}" -o app.ipa
+          # Gắp file thực thi (YouTube hoặc bất kỳ app nào)
+          unzip -j app.ipa "Payload/*.app/*" -d src/refinery/staging/ 2>/dev/null || true
+          
+          # Tìm file thực thi chính (file nặng nhất trong staging)
+          TARGET_BIN=$(ls -S src/refinery/staging/ | head -1)
+          echo "TARGET_NAME=$TARGET_BIN" >> $GITHUB_ENV
+          mv "src/refinery/staging/$TARGET_BIN" src/refinery/staging/main_bin
+
+
+      - name: 💎 Chế tác Cầu nối (Lối thoát hiểm)
+        run: |
+          TARGET_BIN="src/refinery/staging/main_bin"
+          OUT_DIR="headers/${{ github.event.inputs.folder_name }}"
+          
+          echo "// Refinery Bridge Header: Toàn tập" > "$OUT_DIR/Bridge.h"
+          echo "@import Foundation; @import UIKit;" >> "$OUT_DIR/Bridge.h"
+          
+          # Hốt sạch mọi thứ trông giống Class (Chỉ cần bắt đầu bằng chữ hoa)
+          # Không lọc tiền tố để tránh bỏ lỡ 'anh Bin' khi đổi tên
+          strings "$TARGET_BIN" | grep -E "^[A-Z][A-Za-z0-9_]{5,64}$" | sort -u | sed 's/.*/@class &;/' >> "$OUT_DIR/Bridge.h"
+
+      - name: 🎁 Nhập kho (Push)
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add headers/
+          git commit -m "💎 Refinery: Thêm linh hồn ${{ github.event.inputs.folder_name }} vào kho" || exit 0
+          git push
+
+      - name: 🗑️ Dọn rác
+        if: always()
+        run: rm -rf src/refinery/staging/ app.ipa

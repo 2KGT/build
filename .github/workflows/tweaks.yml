@@ -1,0 +1,261 @@
+name: "Build Multi Tweaks vip"
+
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: 'Linh hồn dự án'
+        required: true
+        type: choice
+        default: 'None'
+        options: [ 'None', AutoAC, AutoDL, Facebook, Yomost, YouMod, YTLite ]
+      ver_type:
+        description: 'Cấp độ nâng cấp version'
+        type: choice
+        default: 'Patch (Vá lỗi)'
+        options: [ 'Patch (Vá lỗi)', 'Minor (Tính năng)', 'Major (Đại tu)' ]
+      publish:
+        description: '🆙 Xuất bản lên sileo (Test-Publish)'
+        type: boolean
+        default: false
+      send_deb:
+        description: '🤖 Gửi file build đến BotTelegram'
+        type: boolean
+        default: true
+      clean_build:
+        description: '🗑️ Xoá cache trước build'
+        type: boolean
+        default: true
+      run_clean_theos:
+        description: '🗑️ Xoá cache Theos sau build'
+        type: boolean
+        default: false
+      run_clean_logs:
+        description: '🗑️ Xóa commit & workflow runs'
+        type: boolean
+        default: false
+      clean_delay_seconds:
+        description: '⏱️ Timeout xoá (giây)'
+        type: number
+        default: 90
+
+  push:
+    paths:
+      - '**/control'
+
+env:
+  TZ: "Asia/Ho_Chi_Minh"
+  THEOS: ${{ github.workspace }}/theos_engine
+
+jobs:
+  forge:
+    runs-on: macos-latest
+    permissions:
+      contents: write
+      actions: write
+    steps:
+
+      # 1. Kiểm tra đầu vào và khởi tạo hệ thống
+      - name: 📥 1.1 Checkout Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🔍 1.2 Phát hiện Dự án thay đổi (Git Push)
+        id: detect_project
+        if: github.event_name == 'push'
+        run: |
+          CHANGED_FILE=$(git diff-tree --no-commit-id --name-only -r ${{ github.sha }} | grep 'control' | head -n 1 || true)
+          if [ -z "$CHANGED_FILE" ]; then
+            echo "PROJECT_NAME=None" >> $GITHUB_ENV
+          else
+            PROJECT_NAME=$(echo "$CHANGED_FILE" | awk -F'/' '{print $1}')
+            echo "PROJECT_NAME=$PROJECT_NAME" >> $GITHUB_ENV
+          fi
+
+      - name: 🛑 1.3 Kiểm tra Đầu vào Dự án (Gác cổng sớm)
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_PROJECT: ${{ github.event.inputs.project }}
+        run: |
+          python3 .github/scripts/check_project.py
+
+      - name: 🛠️ 1.4 Cài đặt Hệ thống Theos (Always run)
+        run: |
+          brew update
+          brew install make ldid dpkg
+
+      - name: 🛠️ 1.5 Setup Theos Engine (Cache)
+        id: cache-theos
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.THEOS }}
+          key: theos-engine-${{ runner.os }}
+
+      - name: ⌛️ 1.6 Clone Theos (cache miss)
+        if: steps.cache-theos.outputs.cache-hit != 'true'
+        run: |
+          git clone --recursive https://github.com/theos/theos.git $THEOS
+          mkdir -p $THEOS/sdks
+          curl -L https://github.com/theos/sdks/archive/master.tar.gz | tar -xz --strip-components=1 -C $THEOS/sdks
+
+      # 2. Tự động Biên Dịch (Build Engine)
+      - name: 🚎 2.1 Tự động Biên Dịch (Build Engine)
+        id: python_build
+        env:
+          INPUT_PROJECT: ${{ github.event.inputs.project || env.PROJECT_NAME }}
+          INPUT_VER_TYPE: ${{ github.event.inputs.ver_type }}
+          INPUT_CLEAN_BUILD: ${{ github.event.inputs.clean_build || 'true' }}
+          INPUT_PUBLISH: ${{ github.event.inputs.publish || 'false' }}
+          INPUT_SEND_DEB: ${{ github.event.inputs.send_deb || 'true' }}
+        run: |
+          export THEOS=${{ env.THEOS }}
+          python3 -u .github/scripts/build_engine.py
+
+      - name: 📝 2.2 Tổng kết & Phân tích lỗi
+        if: always()
+        run: |
+          if [ "${{ steps.python_build.outcome }}" == "success" ]; then
+            echo "## ✅ Build thành công: ${{ steps.python_build.outputs.display_name }}" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ steps.python_build.outputs.bumped }}" == "true" ]; then
+              echo "Phiên bản: **v${{ steps.python_build.outputs.old_ver }} → v${{ steps.python_build.outputs.final_ver }}**" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "Phiên bản: **v${{ steps.python_build.outputs.final_ver }}** (giữ nguyên)" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "## ❌ Build thất bại" >> $GITHUB_STEP_SUMMARY
+            echo "### Phân tích lỗi nhanh:" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            # Tự động trích xuất các dòng lỗi từ log build
+            grep -iE "error|fatal|warning|ld:|make:" .github/scripts/build.log | tail -n 20 >> $GITHUB_STEP_SUMMARY || echo "Không thấy chi tiết lỗi." >> $GITHUB_STEP_SUMMARY
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # 2.3 Lưu version mới, CHANGELOG.md và danh sách giấy phép của dự án lên repo (khi build thành công)
+      - name: 🔖 2.3 Lưu version & nhật ký build vào repo
+        if: success()
+        run: |
+          PROJ="${{ steps.python_build.outputs.display_name }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in control CHANGELOG.md THIRD_PARTY_LICENSES.md; do
+            git add -A -- "$PROJ/$f" 2>/dev/null || true
+          done
+          git commit -m "🔖 $PROJ v${{ steps.python_build.outputs.final_ver }} [skip ci]" || { echo "Không có thay đổi để commit."; exit 0; }
+          git pull --rebase --autostash origin "${GITHUB_REF_NAME}" || true
+          git push
+
+      # 3. Lưu trữ Artifacts (để tải về từ GitHub)
+      - name: 🧾 3.0 Lưu nhật ký build (chạy cả khi build lỗi)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log
+          path: .github/scripts/build*.log
+          if-no-files-found: ignore
+
+      - name: 📦 3.1 Upload Artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tweak-release-package
+          path: output/
+          if-no-files-found: warn
+
+      # 4. Sync lên Repo Sileo (nếu cần)
+      - name: ♻️ 4.1 Sync & Release
+        if: success() && github.event.inputs.publish == 'true' && steps.python_build.outputs.has_deb == 'true'
+        run: |
+          # 1. Clone repo đích
+          git clone https://${{ secrets.REPO_TOKEN }}@github.com/2KGT/repo.git public_repo_target
+
+          shopt -s nullglob
+
+          # 2. Vòng lặp quét tất cả các file .deb trong thư mục output
+          for file in output/*.deb; do
+            filename=$(basename "$file")
+
+            # Tách Bundle ID gốc (phần trước dấu _ đầu tiên)
+            bundle_id=$(echo "$filename" | cut -d'_' -f1)
+
+            # Tên thư mục ngắn gọn: lấy phần cuối của Bundle ID
+            # Muốn giữ nguyên dạng đầy đủ thì đổi thành: tweak_folder=$bundle_id
+            tweak_folder=$(echo "$bundle_id" | awk -F'.' '{print $NF}')
+
+            target_dir="public_repo_target/repo/debs/$tweak_folder"
+            mkdir -p "$target_dir"
+
+            cp "$file" "$target_dir/"
+            echo "✅ Đã copy file deb $filename vào $target_dir"
+
+            # Gom file .dylib (nếu có) đi cùng file deb
+            for dylib in output/*.dylib; do
+              if [ -f "$dylib" ]; then
+                cp "$dylib" "$target_dir/"
+                echo "🎯 Đã gom $(basename "$dylib") vào $target_dir"
+              fi
+            done
+          done
+
+          # 3. Commit và push
+          cd public_repo_target
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+
+          git add repo/
+          if git diff-index --quiet HEAD --; then
+            echo "ℹ️ Không có thay đổi nào mới để cập nhật."
+          else
+            git commit -m "🚀 [Auto Sync] ${{ steps.python_build.outputs.display_name }} v${{ steps.python_build.outputs.final_ver }}"
+            git push origin main
+          fi
+
+      # ══════════════════════════════════════════════════════
+      # PHASE 2 — CHỜ & DỌN DẸP (chỉ khi thủ công + có tick)
+      # Telegram Phase 2 gửi bên trong clean.py → tgbot.notify_clean()
+      # ══════════════════════════════════════════════════════
+
+      - name: "⏳ Chờ cloud xử lý xong trước khi dọn dẹp"
+        if: >
+          github.event_name == 'workflow_dispatch' &&
+          (inputs.run_clean_theos == true || inputs.run_clean_logs == true)
+        run: |
+          DELAY="${{ inputs.clean_delay_seconds }}"
+          DELAY="${DELAY:-90}"
+          echo "⏱️  Chờ ${DELAY}s để cloud hoàn tất xử lý dữ liệu..."
+          for i in $(seq "$DELAY" -10 1); do
+            echo "   ⏳ Còn ${i}s..."
+            sleep 10
+          done
+          echo "✅ Bắt đầu dọn dẹp!"
+
+      - name: "🧹🗑️ Dọn dẹp repo (clean.py)"
+        id: clean
+        if: >
+          github.event_name == 'workflow_dispatch' &&
+          (inputs.run_clean_theos == true || inputs.run_clean_logs == true)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_CLEAN_THEOS: ${{ inputs.run_clean_theos }}
+          RUN_CLEAN_LOGS: ${{ inputs.run_clean_logs }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+        run: |
+          python3 .github/scripts/clean.py
+
+      # 5. Gửi Thông Báo Trạng Thái Luồng Telegram bot
+      - name: 📢 5.1 Gửi Thông Báo Trạng Thái Luồng
+        if: always()
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+          JOB_STATUS: ${{ job.status }}
+          PROJECT_NAME: ${{ github.event.inputs.project || env.PROJECT_NAME || 'Unknown' }}
+          SEND_DEB: ${{ github.event.inputs.send_deb || 'true' }}
+        run: |
+          if [ -f "./.github/scripts/tgbot.py" ]; then
+             # Sửa lỗi externally-managed-environment bằng cờ --break-system-packages
+             pip3 install requests --break-system-packages
+             python3 ./.github/scripts/tgbot.py
+          fi
