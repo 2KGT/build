@@ -1,43 +1,50 @@
 name: "Build Multi Tweaks vip"
 
+# ┌─ BẢNG CẤU HÌNH (thứ tự hiển thị trên GitHub) ──────────────────────────────
+# │ 1. BUILD   : project (mặc định None = chặn chạy nhầm), ver_type, clean_build
+# │ 2. PHÁT HÀNH: publish (repo Sileo), send_deb (Telegram)
+# │ 3. DỌN DẸP : run_clean_theos, run_clean_logs, clean_delay_seconds  (chỉ chạy khi bấm tay)
+# └─ Push file <Dự án>/control => tự build MỌI dự án có control đổi (song song), tuỳ chọn lấy mặc định
+#    Bấm tay: luôn phải chọn đúng 1 dự án (không có chế độ build tất cả)
 on:
   workflow_dispatch:
     inputs:
       project:
-        description: 'Linh hồn dự án'
+        description: '📦 Dự án (None = chưa chọn, sẽ dừng)'
         required: true
         type: choice
         default: 'None'
         options: [ 'None', AutoAC, AutoDL, BiliBili, Facebook, Liquid, Yomost, YouMod, YTLite ]
 
-
       ver_type:
-        description: 'Cấp độ nâng cấp version'
+        description: '🔢 Nâng version'
         type: choice
         default: 'Patch (Vá lỗi)'
-        options: [ 'Patch (Vá lỗi)', 'Minor (Tính năng)', 'Major (Đại tu)' ]
+        options: [ 'Patch (Vá lỗi)', 'Minor (Tính năng)', 'Major (Đại tu)', 'Giữ nguyên' ]
+      clean_build:
+        description: '🧼 make clean trước khi build'
+        type: boolean
+        default: true
+
       publish:
-        description: '🆙 Xuất bản lên sileo (Test-Publish)'
+        description: '🚀 Đẩy lên repo Sileo'
         type: boolean
         default: false
       send_deb:
-        description: '🤖 Gửi file build đến BotTelegram'
+        description: '🤖 Gửi .deb qua Telegram'
         type: boolean
         default: true
-      clean_build:
-        description: '🧼 make clean trước khi build (tắt = build tăng dần)'
-        type: boolean
-        default: true
+
       run_clean_theos:
-        description: '🧹 Gỡ ghost submodule "theos" khỏi git index (không đụng cache)'
+        description: '🧹 Dọn: gỡ ghost submodule theos'
         type: boolean
         default: false
       run_clean_logs:
-        description: '🗑️ Reset lịch sử commit + xoá workflow runs + xoá MỌI cache Actions (kể cả cache Theos)'
+        description: '🗑️ Dọn: reset commit + xoá runs & cache'
         type: boolean
         default: false
       clean_delay_seconds:
-        description: '⏱️ Timeout xoá (giây)'
+        description: '⏱️ Chờ trước khi dọn (giây)'
         type: number
         default: 90
 
@@ -55,12 +62,61 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # ════════════════════════════════════════════════════════════════
+  # JOB 1 — PLAN: quyết định build dự án nào (nhẹ, chạy trên Ubuntu)
+  # ════════════════════════════════════════════════════════════════
+  plan:
+    name: 🗺️ Lập kế hoạch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      count: ${{ steps.plan.outputs.count }}
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: 🗺️ Xác định dự án cần build (plan.py)
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_PROJECT: ${{ github.event.inputs.project }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: python3 .github/scripts/plan.py
+
+      - name: 📢 Báo Telegram khi không lập được kế hoạch
+        if: failure()
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+          JOB_STATUS: failure
+          PROJECT_NAME: ${{ github.event.inputs.project || 'Unknown' }}
+          SEND_DEB: 'false'
+        run: |
+          pip3 install requests --break-system-packages
+          python3 .github/scripts/tgbot.py || true
+
+  # ════════════════════════════════════════════════════════════════
+  # JOB 2 — FORGE: build từng dự án (matrix, mỗi dự án một runner macOS)
+  # ════════════════════════════════════════════════════════════════
   forge:
+    name: 🔨 Build ${{ matrix.project }}
+    needs: plan
+    if: needs.plan.outputs.count != '0'
     runs-on: macos-latest
     timeout-minutes: 60
     permissions:
       contents: write
       actions: write
+    strategy:
+      fail-fast: false        # một dự án lỗi không làm dừng các dự án khác
+      max-parallel: 2         # giới hạn số runner macOS chạy cùng lúc
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      INPUT_PROJECT: ${{ matrix.project }}   # build_engine.py đọc
+      PROJECT_NAME: ${{ matrix.project }}    # tgbot.py đọc
     steps:
 
       # 1. Kiểm tra đầu vào và khởi tạo hệ thống
@@ -69,37 +125,6 @@ jobs:
         with:
           fetch-depth: 0
           token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: 🔍 1.2 Phát hiện Dự án thay đổi (Git Push)
-        id: detect_project
-        if: github.event_name == 'push'
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-        run: |
-          # Quét toàn bộ khoảng push (không chỉ commit cuối). Chỉ nhận <Dự án>/control, bỏ qua control ở gốc repo.
-          if [ -z "$BEFORE_SHA" ] || [ "$BEFORE_SHA" = "0000000000000000000000000000000000000000" ] \
-             || ! git cat-file -e "${BEFORE_SHA}^{commit}" 2>/dev/null; then
-            FILES=$(git diff-tree --no-commit-id --name-only -r "$GITHUB_SHA" || true)
-          else
-            FILES=$(git diff --name-only "$BEFORE_SHA" "$GITHUB_SHA" || true)
-          fi
-          PROJECTS=$(printf '%s\n' "$FILES" | grep -E '^[^/]+/control$' | awk -F/ '{print $1}' | sort -u || true)
-          if [ -z "$PROJECTS" ]; then
-            echo "PROJECT_NAME=None" >> "$GITHUB_ENV"
-          else
-            FIRST=$(printf '%s\n' "$PROJECTS" | head -n 1)
-            echo "PROJECT_NAME=$FIRST" >> "$GITHUB_ENV"
-            if [ "$(printf '%s\n' "$PROJECTS" | wc -l | tr -d ' ')" -gt 1 ]; then
-              echo "::warning::Push đổi control của nhiều dự án ($(printf '%s ' $PROJECTS)). Chỉ build '$FIRST'; chạy tay các dự án còn lại."
-            fi
-          fi
-
-      - name: 🛑 1.3 Kiểm tra Đầu vào Dự án (Gác cổng sớm)
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          MANUAL_PROJECT: ${{ github.event.inputs.project }}
-        run: |
-          python3 .github/scripts/check_project.py
 
       - name: 🛠️ 1.4 Cài đặt Hệ thống Theos (Always run)
         run: |
@@ -126,7 +151,6 @@ jobs:
       - name: 🚎 2.1 Tự động Biên Dịch (Build Engine)
         id: python_build
         env:
-          INPUT_PROJECT: ${{ github.event.inputs.project || env.PROJECT_NAME }}
           INPUT_VER_TYPE: ${{ github.event.inputs.ver_type }}
           INPUT_CLEAN_BUILD: ${{ github.event.inputs.clean_build || 'true' }}
           INPUT_PUBLISH: ${{ github.event.inputs.publish || 'false' }}
@@ -182,7 +206,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
+          name: build-log-${{ matrix.project }}
           path: .github/scripts/build*.log
           if-no-files-found: ignore
 
@@ -190,7 +214,7 @@ jobs:
         if: success()
         uses: actions/upload-artifact@v4
         with:
-          name: tweak-release-package
+          name: tweak-release-${{ matrix.project }}
           path: output/
           if-no-files-found: warn
 
@@ -235,20 +259,56 @@ jobs:
             echo "ℹ️ Không có thay đổi nào mới để cập nhật."
           else
             git commit -m "🚀 [Auto Sync] $SYNC_NAME v$SYNC_VER"
-            git push origin main
+            # Nhiều dự án build song song cùng đẩy lên repo Sileo => rebase rồi thử lại
+            for i in 1 2 3 4; do
+              git pull --rebase --autostash origin main && git push origin main && exit 0
+              echo "⚠️ Push Sileo lần $i thất bại, thử lại..."; sleep $((i * 3))
+            done
+            exit 1
           fi
 
-      # ══════════════════════════════════════════════════════
-      # PHASE 2 — CHỜ & DỌN DẸP (chỉ khi thủ công + có tick)
-      # Telegram Phase 2 gửi bên trong clean.py → tgbot.notify_clean()
-      # ══════════════════════════════════════════════════════
+      # 5. Gửi Thông Báo Trạng Thái Luồng Telegram bot
+      - name: 📢 5.1 Gửi Thông Báo Trạng Thái Luồng
+        if: always()
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+          JOB_STATUS: ${{ job.status }}
+          SEND_DEB: ${{ github.event.inputs.send_deb || 'true' }}
+        run: |
+          if [ -f "./.github/scripts/tgbot.py" ]; then
+             # Sửa lỗi externally-managed-environment bằng cờ --break-system-packages
+             pip3 install requests --break-system-packages
+             python3 ./.github/scripts/tgbot.py
+          fi
+
+  # ════════════════════════════════════════════════════════════════
+  # JOB 3 — CLEANUP: chờ cloud rồi dọn dẹp (chỉ khi bấm tay + có tick + mọi build thành công)
+  # Telegram của giai đoạn này gửi bên trong clean.py → tgbot.notify_clean()
+  # ════════════════════════════════════════════════════════════════
+  cleanup:
+    name: 🧹 Dọn dẹp
+    needs: [plan, forge]
+    if: >
+      always() && github.event_name == 'workflow_dispatch' &&
+      needs.forge.result == 'success' &&
+      (inputs.run_clean_theos == true || inputs.run_clean_logs == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: "⏳ Chờ cloud xử lý xong trước khi dọn dẹp"
-        if: >
-          github.event_name == 'workflow_dispatch' &&
-          (inputs.run_clean_theos == true || inputs.run_clean_logs == true)
+        env:
+          DELAY: ${{ inputs.clean_delay_seconds }}
         run: |
-          DELAY="${{ inputs.clean_delay_seconds }}"
           DELAY="${DELAY:-90}"
           echo "⏱️  Chờ ${DELAY}s để cloud hoàn tất xử lý dữ liệu..."
           for i in $(seq "$DELAY" -10 1); do
@@ -258,10 +318,6 @@ jobs:
           echo "✅ Bắt đầu dọn dẹp!"
 
       - name: "🧹🗑️ Dọn dẹp repo (clean.py)"
-        id: clean
-        if: >
-          github.event_name == 'workflow_dispatch' &&
-          (inputs.run_clean_theos == true || inputs.run_clean_logs == true)
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RUN_CLEAN_THEOS: ${{ inputs.run_clean_theos }}
@@ -269,20 +325,5 @@ jobs:
           TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
           TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
         run: |
+          pip3 install requests --break-system-packages
           python3 .github/scripts/clean.py
-
-      # 5. Gửi Thông Báo Trạng Thái Luồng Telegram bot
-      - name: 📢 5.1 Gửi Thông Báo Trạng Thái Luồng
-        if: always()
-        env:
-          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
-          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
-          JOB_STATUS: ${{ job.status }}
-          PROJECT_NAME: ${{ github.event.inputs.project || env.PROJECT_NAME || 'Unknown' }}
-          SEND_DEB: ${{ github.event.inputs.send_deb || 'true' }}
-        run: |
-          if [ -f "./.github/scripts/tgbot.py" ]; then
-             # Sửa lỗi externally-managed-environment bằng cờ --break-system-packages
-             pip3 install requests --break-system-packages
-             python3 ./.github/scripts/tgbot.py
-          fi
