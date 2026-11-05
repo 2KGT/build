@@ -1,0 +1,245 @@
+name: Vạn Dump Unified
+
+on:
+  workflow_dispatch:
+    inputs:
+      ipa_url:
+        description: 'Link IPA (đã decrypt)'
+        required: true
+        type: string
+      app_name:
+        description: 'Thư mục trong headers/ – dùng đúng tên handler: YouTubeHeader, BilibiliHDHeader, TwitterHeader, FacebookHeader, InstagramHeader, SpotifyHeader, TikTokHeader'
+        required: true
+        default: 'YouTubeHeader'
+        type: string
+      target_classes:
+        description: 'Nhặt class (trống = all, cách nhau bằng dấu cách)'
+        required: false
+        type: string
+      keep_patterns:
+        description: 'Giữ file Swift _Ttc* chứa các chuỗi này (VD: YT SPT, trống = xoá hết _Ttc)'
+        required: false
+        default: 'YT SPT'
+        type: string
+      clean_warehouse:
+        description: 'Dọn sạch thư mục app cũ trước khi nhập mới'
+        type: boolean
+        default: false
+      skip_filtering:
+        description: 'Tắt bộ lọc rác (giữ lại tất cả)'
+        type: boolean
+        default: false
+      apply_patch:
+        description: 'Vá @class Forward Declaration vào từng header'
+        type: boolean
+        default: true
+      gen_bridge:
+        description: 'Tạo Bridge.h + ClassList.txt (handler của build_engine cần 2 file này)'
+        type: boolean
+        default: true
+      gen_selectors:
+        description: 'Tạo Selectors.txt (danh sách selector, file lớn – handler chỉ dùng để log gợi ý hook)'
+        type: boolean
+        default: false
+
+# Không cho 2 lần chạy cùng app đạp nhau khi push
+concurrency:
+  group: dump-${{ inputs.app_name }}
+  cancel-in-progress: false
+
+jobs:
+  dump:
+    runs-on: macos-latest
+    timeout-minutes: 45
+    permissions:
+      contents: write
+    env:
+      IPA_URL: ${{ inputs.ipa_url }}
+      APP_NAME: ${{ inputs.app_name }}
+      TARGET_CLASSES: ${{ inputs.target_classes }}
+      KEEP_PATTERNS: ${{ inputs.keep_patterns }}
+      CLEAN: ${{ inputs.clean_warehouse }}
+      SKIP_FILTER: ${{ inputs.skip_filtering }}
+      APPLY_PATCH: ${{ inputs.apply_patch }}
+      GEN_BRIDGE: ${{ inputs.gen_bridge }}
+      GEN_SELECTORS: ${{ inputs.gen_selectors }}
+      TARGET_DIR: headers/${{ inputs.app_name }}
+      WORK: ${{ github.workspace }}/.work
+
+    steps:
+      - name: 🔒 Kiểm tra tên thư mục
+        run: |
+          case "$APP_NAME" in
+            */*|*..*|"")
+              echo "❌ app_name không hợp lệ (không được chứa / hoặc ..)"; exit 1 ;;
+          esac
+
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🛠️ Cài ipsw
+        run: |
+          brew install --formula blacktop/tap/ipsw
+          ipsw version
+
+      - name: 📦 Tải và giải nén IPA
+        run: |
+          mkdir -p "$WORK"
+          curl -fL -A "Mozilla/5.0" "$IPA_URL" -o "$WORK/app.ipa"
+          unzip -q "$WORK/app.ipa" -d "$WORK/extracted"
+          APP_DIR=$(find "$WORK/extracted/Payload" -maxdepth 1 -name "*.app" | head -1)
+          [ -n "$APP_DIR" ] || { echo "❌ Không thấy .app trong Payload"; exit 1; }
+          MAIN_EXEC=$(/usr/libexec/PlistBuddy -c "Print :CFBundleExecutable" "$APP_DIR/Info.plist" 2>/dev/null || true)
+          echo "📱 App: $(basename "$APP_DIR") | Binary chính: ${MAIN_EXEC:-không rõ}"
+
+      - name: ⚡ Dump toàn bộ Mach-O (header thô + danh sách class)
+        run: |
+          RAW="$WORK/raw"; mkdir -p "$RAW"
+          : > "$WORK/classnames.txt"
+
+          find "$WORK/extracted/Payload" -type f \
+            ! -name "*.*" ! -name "CodeResources" ! -name "PkgInfo" > "$WORK/bin_list.txt"
+
+          while IFS= read -r BIN; do
+            file -b "$BIN" | grep -q "Mach-O" || continue
+            echo "🏗️ $(basename "$BIN")"
+            ipsw class-dump "$BIN" --headers -o "$RAW" || echo "⚠️ class-dump lỗi: $(basename "$BIN")"
+            # Tên class ObjC thật lấy từ section __objc_classname (sạch hơn nhiều so với `strings`)
+            otool -v -s __TEXT __objc_classname "$BIN" 2>/dev/null \
+              | awk '/^[0-9a-fA-F]+[ \t]+/ {print $2}' >> "$WORK/classnames.txt" || true
+          done < "$WORK/bin_list.txt"
+
+          echo "📊 Header thô: $(find "$RAW" -type f -name '*.h' | wc -l)"
+          echo "🧬 Tên class thu được: $(sort -u "$WORK/classnames.txt" | wc -l)"
+
+      - name: 🧺 Chọn lọc, làm sạch, vá header (trên bản staging)
+        run: |
+          RAW="$WORK/raw"; STAGE="$WORK/stage"
+          rm -rf "$STAGE"; mkdir -p "$STAGE"
+
+          # 1. Chọn header
+          set -f   # chỉ tắt glob khi tách danh sách class do người dùng nhập
+          if [ -z "$TARGET_CLASSES" ]; then
+            echo "🚜 DUMP ALL"
+            find "$RAW" -type f -name "*.h" -exec cp -f {} "$STAGE/" \;
+          else
+            echo "🧺 Nhặt theo danh sách: $TARGET_CLASSES"
+            for CLS in $TARGET_CLASSES; do
+              find "$RAW" -type f -iname "*${CLS}*.h" -exec cp -f {} "$STAGE/" \;
+            done
+          fi
+          set +f   # bật lại glob cho các bước lọc bên dưới
+          echo "📦 Đã chọn: $(ls "$STAGE" | wc -l)"
+
+          # 2. Bộ lọc rác
+          if [ "$SKIP_FILTER" != "true" ]; then
+            find "$STAGE" -name "*.h" -type f -size -30c -delete
+            rm -f "$STAGE"/*.metadata.h 2>/dev/null || true
+
+            set -f; KEEP_RE=$(printf '%s\n' $KEEP_PATTERNS | paste -sd'|' -); set +f
+            for f in "$STAGE"/_Ttc*; do
+              [ -e "$f" ] || continue
+              if [ -z "$KEEP_RE" ] || ! basename "$f" | grep -Eq "$KEEP_RE"; then
+                rm -f "$f"
+              fi
+            done
+            echo "✅ Sau lọc: $(ls "$STAGE" | wc -l)"
+          fi
+
+          # 3. Khử include nội bộ (giữ import hệ thống dạng <...>)
+          find "$STAGE" -type f -name "*.h" -exec \
+            sed -i '' -e '/#include "/d' -e '/#import "/{/<.*>/!d;}' {} +
+
+          # 4. Vá forward declaration (chạy trên staging mới nên không bao giờ bị chèn lặp)
+          if [ "$APPLY_PATCH" = "true" ]; then
+            cat > "$WORK/patch.txt" <<'EOF'
+          // [vanpatch]
+          @class NSObject, NSString, NSArray, NSDictionary, UIView, UIViewController;
+          @protocol NSObject, NSCopying, NSCoding;
+          EOF
+            # (heredoc bên trên được YAML cắt thụt lề nên EOF nằm đúng cột 0)
+            find "$STAGE" -type f -name "*.h" -print0 | while IFS= read -r -d '' f; do
+              grep -q '\[vanpatch\]' "$f" && continue
+              { cat "$WORK/patch.txt"; cat "$f"; } > "$f.tmp" && mv "$f.tmp" "$f"
+            done
+          fi
+
+          # 5. Đồng bộ vào repo
+          if [ "$CLEAN" = "true" ]; then
+            echo "🧨 Dọn sạch $TARGET_DIR"
+            rm -rf "$TARGET_DIR"
+          fi
+          mkdir -p "$TARGET_DIR"
+          find "$STAGE" -type f -name "*.h" ! -name "Bridge.h" -exec cp -f {} "$TARGET_DIR/" \;
+          echo "📦 Thư mục app hiện có $(find "$TARGET_DIR" -maxdepth 1 -name '*.h' | wc -l) header"
+
+      - name: 💎 Tạo Bridge.h (cầu nối @class)
+        if: inputs.gen_bridge
+        run: |
+          # Bridge.h nằm ngay trong headers/<app>/ vì handler (twitter/bilibili...) và Tweak.x
+          # import dạng "<App>Header/Bridge.h". Không bị sed/patch đụng vào vì các bước đó chỉ chạy trên staging.
+          BRIDGE="$TARGET_DIR/Bridge.h"
+          CLASSLIST="$TARGET_DIR/ClassList.txt"
+          mkdir -p "$TARGET_DIR"
+
+          {
+            # Tên class từ binary
+            cat "$WORK/classnames.txt"
+            # Tên class từ toàn bộ header thô (không phụ thuộc target_classes)
+            ls "$WORK/raw" 2>/dev/null | sed -n 's/\.h$//p'
+            # Gộp với bridge cũ (nếu không clean) để không mất class của lần chạy trước
+            [ -f "$BRIDGE" ] && sed -n 's/^@class \(.*\);$/\1/p' "$BRIDGE"
+          } | grep -E '^[A-Za-z][A-Za-z0-9_]{2,}$' | sort -u > "$WORK/bridge_names.txt"
+
+          {
+            echo "// Bridge Header tự sinh – KHÔNG sửa tay"
+            echo "#pragma once"
+            echo "#import <Foundation/Foundation.h>"
+            echo "#import <UIKit/UIKit.h>"
+            echo
+            sed 's/.*/@class &;/' "$WORK/bridge_names.txt"
+          } > "$BRIDGE"
+
+          cp -f "$WORK/bridge_names.txt" "$CLASSLIST"
+          echo "💎 Bridge.h + ClassList.txt: $(wc -l < "$WORK/bridge_names.txt") class"
+
+      - name: 🔎 Tạo Selectors.txt
+        if: inputs.gen_selectors
+        run: |
+          mkdir -p "$TARGET_DIR"
+          # "- (void)foo:(id)a bar:(int)b;" -> "foo:bar:"   |   "- (id)name;" -> "name"
+          find "$WORK/raw" -type f -name "*.h" -print0 | xargs -0 cat | perl -ne '
+            if (/^[-+]\s*\([^)]*\)\s*(.*?);/) {
+              my $r = $1;
+              if ($r =~ /\w+\s*:/) { my @p = $r =~ /(\w+)\s*:/g; print join(":", @p) . ":\n"; }
+              elsif ($r =~ /^(\w+)/) { print "$1\n"; }
+            }' | sort -u > "$TARGET_DIR/Selectors.txt"
+          echo "🔎 Selectors.txt: $(wc -l < "$TARGET_DIR/Selectors.txt") selector"
+
+      - name: 🚀 Commit và push
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add -A headers/
+          if git diff --cached --quiet; then
+            echo "Không có thay đổi để commit."; exit 0
+          fi
+          git commit -m "🚀 Dump: $APP_NAME [unified]"
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "$GITHUB_REF_NAME" && git push && exit 0
+            echo "⚠️ Push lần $i thất bại, thử lại..."; sleep 3
+          done
+          exit 1
+
+      - name: 📋 Tóm tắt
+        if: always()
+        run: |
+          {
+            echo "### Dump \`$APP_NAME\`"
+            echo "- Header trong repo: $(find "$TARGET_DIR" -maxdepth 1 -name '*.h' 2>/dev/null | wc -l)"
+            [ -f "$TARGET_DIR/Bridge.h" ] && echo "- Bridge: $(grep -c '^@class' "$TARGET_DIR/Bridge.h") class"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: 🗑️ Dọn rác
+        if: always()
+        run: rm -rf "$WORK"
