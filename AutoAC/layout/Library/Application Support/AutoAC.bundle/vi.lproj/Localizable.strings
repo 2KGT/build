@@ -8,6 +8,7 @@
 "Bạn" = "Bạn";
 "Bản dịch" = "Bản dịch";
 "Bảng chia sẻ / Tệp" = "Bảng chia sẻ / Tệp";
+"Bảng, menu và hộp thoại" = "Bảng, menu và hộp thoại";
 "Bật nhãn" = "Bật nhãn";
 "Bật thu gọn" = "Bật thu gọn";
 "Bật tự bỏ qua" = "Bật tự bỏ qua";
@@ -41,11 +42,11 @@
 "Chọn tốc độ phát khi mở video (0.5x đến 3x) và số giây tua khi chạm đúp (5 đến 60 giây). Chọn Theo YouTube để dùng mặc định." = "Chọn tốc độ phát khi mở video (0.5x đến 3x) và số giây tua khi chạm đúp (5 đến 60 giây). Chọn Theo YouTube để dùng mặc định.";
 "Chọn và sắp xếp các nút AutoAC trên trình phát (tải xuống, tốc độ, PiP, hẹn giờ, phát ngoài): đặt ở hàng trên (dưới nút bánh răng) hoặc hàng dưới (cạnh nút toàn màn hình), kéo để đổi thứ tự hoặc chuyển hàng, hoặc tắt hẳn từng nút. Nhấn giữ biểu tượng Tốc độ để về tốc độ gốc. Nút tải chỉ áp dụng trong video; nút tải trong Shorts luôn bật." = "Chọn và sắp xếp các nút AutoAC trên trình phát (tải xuống, tốc độ, PiP, hẹn giờ, phát ngoài): đặt ở hàng trên (dưới nút bánh răng) hoặc hàng dưới (cạnh nút toàn màn hình), kéo để đổi thứ tự hoặc chuyển hàng, hoặc tắt hẳn từng nút. Nhấn giữ biểu tượng Tốc độ để về tốc độ gốc. Nút tải chỉ áp dụng trong video; nút tải trong Shorts luôn bật.";
 "Chờ video phát vài giây rồi thử lại" = "Chờ video phát vài giây rồi thử lại";
-"Cuối video" = "Cuối video";
 "Có quảng cáo trả phí" = "Có quảng cáo trả phí";
 "Cạnh nút toàn màn hình" = "Cạnh nút toàn màn hình";
 "Cảnh xem trước, tóm tắt" = "Cảnh xem trước, tóm tắt";
 "Cột nút bên phải" = "Cột nút bên phải";
+"Dock trong suốt, không dải trắng/đen" = "Dock trong suốt, không dải trắng/đen";
 "Dung lượng ứng dụng" = "Dung lượng ứng dụng";
 "Dưới" = "Dưới";
 "Dưới nút bánh răng" = "Dưới nút bánh răng";
@@ -59,8 +60,10 @@
 "Dữ liệu của app" = "Dữ liệu của app";
 "Dữ liệu từ sponsor.ajay.app" = "Dữ liệu từ sponsor.ajay.app";
 "Dữ liệu web (đăng nhập, bộ nhớ trang)" = "Dữ liệu web (đăng nhập, bộ nhớ trang)";
+"End" = "End";
 "Ghép video và âm thanh thất bại" = "Ghép video và âm thanh thất bại";
 "Giao diện" = "Giao diện";
+"Hiện" = "Hiện";
 "Hiện bảng chọn độ phân giải trước khi tải video. Tắt đi sẽ tải chất lượng cao nhất có thể." = "Hiện bảng chọn độ phân giải trước khi tải video. Tắt đi sẽ tải chất lượng cao nhất có thể.";
 "Hiện nút lưu ở góc trên bên trái khi xem ảnh trong bài đăng cộng đồng, lưu bản gốc vào Ảnh. Cần mở lại app." = "Hiện nút lưu ở góc trên bên trái khi xem ảnh trong bài đăng cộng đồng, lưu bản gốc vào Ảnh. Cần mở lại app.";
 "Hiện thông báo ngắn cho biết loại đoạn vừa được bỏ qua." = "Hiện thông báo ngắn cho biết loại đoạn vừa được bỏ qua.";
@@ -96,6 +99,7 @@
 "Không dịch được" = "Không dịch được";
 "Không ghép được video và âm thanh" = "Không ghép được video và âm thanh";
 "Không hiện" = "Không hiện";
+"Không hiện trên thanh tab" = "Không hiện trên thanh tab";
 "Không lưu được vào Ảnh" = "Không lưu được vào Ảnh";
 "Không lưu được, hãy cấp quyền Ảnh" = "Không lưu được, hãy cấp quyền Ảnh";
 "Không lấy được phụ đề" = "Không lấy được phụ đề";
@@ -115,7 +119,11 @@
 "Kiểu màu tab" = "Kiểu màu tab";
 "Kiểu thanh tab" = "Kiểu thanh tab";
 "Kéo nút vào đây" = "Kéo nút vào đây";
+"Kéo tab vào đây" = "Kéo tab vào đây";
 "Kênh đăng ký" = "Kênh đăng ký";
+"Kính lỏng bảng chọn" = "Kính lỏng bảng chọn";
+"Kính lỏng thanh trên" = "Kính lỏng thanh trên";
+"Kính lỏng trình phát" = "Kính lỏng trình phát";
 "Liên kết tại thời điểm này" = "Liên kết tại thời điểm này";
 "Liên kết video" = "Liên kết video";
 "Liên kết, tiêu đề, mô tả" = "Liên kết, tiêu đề, mô tả";
@@ -148,11 +156,14 @@
 "Nhạc" = "Nhạc";
 "Nhấn giữ bình luận" = "Nhấn giữ bình luận";
 "Nhấn giữ một nút rồi kéo để đổi thứ tự hoặc sang hàng khác. Chạm một nút để chọn, rồi đặt vị trí bằng nút kính ở trên (Tất cả = cả hai hàng). Thứ tự đọc từ trái sang phải: nút cuối cùng nằm sát nút bánh răng (hàng trên) hoặc sát nút toàn màn hình (hàng dưới)." = "Nhấn giữ một nút rồi kéo để đổi thứ tự hoặc sang hàng khác. Chạm một nút để chọn, rồi đặt vị trí bằng nút kính ở trên (Tất cả = cả hai hàng). Thứ tự đọc từ trái sang phải: nút cuối cùng nằm sát nút bánh răng (hàng trên) hoặc sát nút toàn màn hình (hàng dưới).";
+"Nhấn giữ một tab rồi kéo để đổi thứ tự hoặc chuyển giữa hai dải. Chạm một tab để chọn, rồi ẩn/hiện hoặc đổi tên ở thẻ bên dưới. Thay đổi tab có hiệu lực sau khi mở lại app." = "Nhấn giữ một tab rồi kéo để đổi thứ tự hoặc chuyển giữa hai dải. Chạm một tab để chọn, rồi ẩn/hiện hoặc đổi tên ở thẻ bên dưới. Thay đổi tab có hiệu lực sau khi mở lại app.";
 "Nhập từ tệp" = "Nhập từ tệp";
 "Nhắc tương tác (like, đăng ký)" = "Nhắc tương tác (like, đăng ký)";
 "No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium. Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app." = "No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium. Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app.";
 "Nút lưu khi xem ảnh" = "Nút lưu khi xem ảnh";
+"Nút nổi trên video" = "Nút nổi trên video";
 "Nút trên trình phát" = "Nút trên trình phát";
+"Nút tìm kiếm, thông báo, quay lại" = "Nút tìm kiếm, thông báo, quay lại";
 "Nút tải xuống" = "Nút tải xuống";
 "Phát bằng" = "Phát bằng";
 "Phát lại" = "Phát lại";
@@ -171,6 +182,7 @@
 "Sao chép dịch: nhấn giữ vào một bình luận để sao chép nội dung, dịch sang ngôn ngữ của thiết bị hoặc dịch rồi sao chép." = "Sao chép dịch: nhấn giữ vào một bình luận để sao chép nội dung, dịch sang ngôn ngữ của thiết bị hoặc dịch rồi sao chép.";
 "Sao lưu cài đặt" = "Sao lưu cài đặt";
 "Short phát hết sẽ không lặp lại. Nếu Tắt cuộn Short đang tắt thì tự chuyển sang Short kế tiếp; nếu Tắt cuộn Short đang bật thì dừng lại ở cuối Short." = "Short phát hết sẽ không lặp lại. Nếu Tắt cuộn Short đang tắt thì tự chuyển sang Short kế tiếp; nếu Tắt cuộn Short đang bật thì dừng lại ở cuối Short.";
+"Shorts tràn xuống thanh tab" = "Shorts tràn xuống thanh tab";
 "Sản phẩm, giỏ hàng" = "Sản phẩm, giỏ hàng";
 "TAB ĐANG HIỆN" = "TAB ĐANG HIỆN";
 "TAB ĐANG ẨN" = "TAB ĐANG ẨN";
@@ -179,6 +191,7 @@
 "Tab, thứ tự, Liquid Glass" = "Tab, thứ tự, Liquid Glass";
 "Thanh tab" = "Thanh tab";
 "Thay nút Tải xuống gốc" = "Thay nút Tải xuống gốc";
+"Thay nền đặc của bảng chọn đáy màn hình, menu ngữ cảnh và hộp thoại bằng kính lỏng. Cần iOS 26 trở lên. Nếu chữ khó đọc hoặc bảng bị lệch, tắt công tắc này." = "Thay nền đặc của bảng chọn đáy màn hình, menu ngữ cảnh và hộp thoại bằng kính lỏng. Cần iOS 26 trở lên. Nếu chữ khó đọc hoặc bảng bị lệch, tắt công tắc này.";
 "Theo YouTube" = "Theo YouTube";
 "Thiết bị không hỗ trợ PiP" = "Thiết bị không hỗ trợ PiP";
 "Thoát chế độ an toàn" = "Thoát chế độ an toàn";
@@ -200,6 +213,7 @@
 "Trong 4 giây" = "Trong 4 giây";
 "Trong trình phát" = "Trong trình phát";
 "Trên" = "Trên";
+"Trên thanh tab, từ trái sang phải" = "Trên thanh tab, từ trái sang phải";
 "Trình phát hệ thống" = "Trình phát hệ thống";
 "Trò chơi" = "Trò chơi";
 "Trước khi tải video, hỏi lưu vào Ảnh hay mở bảng chia sẻ. Tắt đi sẽ theo tuỳ chọn Mở bảng chia sẻ." = "Trước khi tải video, hỏi lưu vào Ảnh hay mở bảng chia sẻ. Tắt đi sẽ theo tuỳ chọn Mở bảng chia sẻ.";
@@ -307,6 +321,7 @@
 "Đang chuẩn bị" = "Đang chuẩn bị";
 "Đang dịch" = "Đang dịch";
 "Đang ghép tệp" = "Đang ghép tệp";
+"Đang hiện trên thanh tab" = "Đang hiện trên thanh tab";
 "Đang lưu ảnh" = "Đang lưu ảnh";
 "Đang lấy phụ đề" = "Đang lấy phụ đề";
 "Đang lấy thông tin" = "Đang lấy thông tin";
@@ -315,6 +330,7 @@
 "Đang tải âm thanh" = "Đang tải âm thanh";
 "Đang tải ảnh bìa" = "Đang tải ảnh bìa";
 "Đang tắt. Chỉ tự bật khi app crash thật; app bị hệ thống tắt không tính." = "Đang tắt. Chỉ tự bật khi app crash thật; app bị hệ thống tắt không tính.";
+"Đang ẩn" = "Đang ẩn";
 "Đoạn kết, credit" = "Đoạn kết, credit";
 "Đoạn lan man, ít quan trọng" = "Đoạn lan man, ít quan trọng";
 "Đoạn mở đầu" = "Đoạn mở đầu";
@@ -346,13 +362,16 @@
 "Đĩa nhạc góc dưới" = "Đĩa nhạc góc dưới";
 "Đưa toàn bộ tuỳ chọn của AutoAC về giá trị mặc định. Cần mở lại app để áp dụng." = "Đưa toàn bộ tuỳ chọn của AutoAC về giá trị mặc định. Cần mở lại app để áp dụng.";
 "Đặt lại cài đặt" = "Đặt lại cài đặt";
+"Đặt nền kính lỏng sau cụm nút bên phải của thanh trên (tìm kiếm, thông báo…) và nút nhỏ bên trái như nút quay lại. Cần iOS 26 trở lên. Ý tưởng theo ytkace (MIT)." = "Đặt nền kính lỏng sau cụm nút bên phải của thanh trên (tìm kiếm, thông báo…) và nút nhỏ bên trái như nút quay lại. Cần iOS 26 trở lên. Ý tưởng theo ytkace (MIT).";
 "Để trống để dùng lại tên mặc định." = "Để trống để dùng lại tên mặc định.";
+"Đổi nền mờ của các nút nổi trong trình phát (YTFrostedGlassView) sang kính lỏng. Cần iOS 26 trở lên." = "Đổi nền mờ của các nút nổi trong trình phát (YTFrostedGlassView) sang kính lỏng. Cần iOS 26 trở lên.";
 "Đổi tên tab" = "Đổi tên tab";
 "đang tính…\n" = "đang tính…\n";
 "đã gắn" = "đã gắn";
 "Ảnh chưa tải xong" = "Ảnh chưa tải xong";
 "Ảnh chụp trạng thái app" = "Ảnh chụp trạng thái app";
 "Ảnh hoặc bảng chia sẻ" = "Ảnh hoặc bảng chia sẻ";
+"Ẩn" = "Ẩn";
 "Ẩn Remix" = "Ẩn Remix";
 "Ẩn bài đăng" = "Ẩn bài đăng";
 "Ẩn bình luận" = "Ẩn bình luận";
@@ -384,3 +403,4 @@
 "Ẩn âm thanh" = "Ẩn âm thanh";
 "ẩn nút Thích, bình luận, chia sẻ, lưu, Remix, âm thanh, thẻ tạm dừng" = "ẩn nút Thích, bình luận, chia sẻ, lưu, Remix, âm thanh, thẻ tạm dừng";
 "ẩn nút lưu Shorts %@ · tốc độ đã chọn %g\n" = "ẩn nút lưu Shorts %@ · tốc độ đã chọn %g\n";
+"Ở tab Shorts, nền dưới video và thanh tab trong suốt (không trắng, không đen) và video kéo xuống tận thanh tab như các tab khác. Thử nghiệm: nếu Shorts bị lệch hoặc cuộn giật, tắt công tắc này. Chỉ có tác dụng khi thanh tab ở chế độ kính lỏng." = "Ở tab Shorts, nền dưới video và thanh tab trong suốt (không trắng, không đen) và video kéo xuống tận thanh tab như các tab khác. Thử nghiệm: nếu Shorts bị lệch hoặc cuộn giật, tắt công tắc này. Chỉ có tác dụng khi thanh tab ở chế độ kính lỏng.";
