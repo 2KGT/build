@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# version: 2.0.0 | 2026-11-06 | ký giả/chứng chỉ, tự biên dịch repo:, token none, form gọn
 # .github/scripts/package_engine.py
 """
 ĐỘNG CƠ ĐÓNG GÓI – thay cho main.yml + cyan_ts.yml + ipa.yml (+ _build_tweaks.yml đã mất)
@@ -39,6 +40,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+
+__version__ = "2.0.0"   # workflow Package.yml kiểm tra dòng này (REQUIRES_ENGINE)
 
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 CATALOG_PATH = os.environ.get("CATALOG_PATH") or os.path.join(SCRIPT_DIR, "..", "tweaks.catalog.json")
@@ -305,7 +308,8 @@ def cmd_plan():
         lines.append("- Không tiêm tweak: chỉ ký lại IPA có sẵn")
     wanted = [label for key, label in (("OUT_IPA", "IPA"), ("OUT_CYAN", ".cyan"), ("OUT_TF", "TrollFools"), ("OUT_DEB", "DEB/dylib")) if outs[key]]
     sign_label = {"none": "không ký", "fake": "ký giả (ldid -S)", "cert": "ký chứng chỉ (codesign + fastlane)"}.get(mode, mode)
-    lines += ["", f"- Đầu ra: **{', '.join(wanted)}**", f"- Ký: **{sign_label}**",
+    lines += ["", f"- Phiên bản: workflow **{env('PKG_WORKFLOW_VERSION', '?')}** · engine **{__version__}**",
+              f"- Đầu ra: **{', '.join(wanted)}**", f"- Ký: **{sign_label}**",
               f"- Cần Theos build: **{'có' if needs_theos else 'không'}**"]
     if local_builds:
         lines.append(f"- Tự biên dịch (chưa có artifact): **{', '.join(local_builds)}**")
@@ -714,7 +718,8 @@ def cmd_make():
         log("MAKE", f"✅ {os.path.basename(p)}")
 
 
-COMMANDS = {"plan": cmd_plan, "resolve": cmd_resolve, "sign": cmd_sign, "make": cmd_make}
+COMMANDS = {"plan": cmd_plan, "resolve": cmd_resolve, "sign": cmd_sign, "make": cmd_make,
+            "version": lambda: print(__version__)}
 
 if __name__ == "__main__":
     if len(sys.argv) != 2 or sys.argv[1] not in COMMANDS:
