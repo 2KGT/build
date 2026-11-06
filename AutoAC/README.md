@@ -26,13 +26,15 @@ Trang **(i)** trong menu cho biết số bản (dòng `bản X.Y.Z`), nhật ký
 
 ### Phát lại
 - Hàng nút ngay trong trình phát, mỗi nút một công tắc: tốc độ (0.25x đến 3x, nhấn giữ để về tốc độ gốc), Picture in Picture, icon tải, **hẹn giờ ngủ** và **phát ngoài**
-- Tốc độ và hẹn giờ ngủ dùng chung kiểu bánh xe cuộn: cuộn để chọn, thả tay là áp dụng. Hẹn giờ có hàng Tắt, hàng **Cuối video** (dừng đúng lúc video hiện tại hết, không tự phát video kế, giống hẹn giờ gốc của YouTube) và các mức 5 đến 120 `min` (`min` là phút, ghi tắt để cả tiếng Anh lẫn tiếng Việt đều đọc được); nút đổi màu khi đang hẹn giờ
+- Tốc độ và hẹn giờ ngủ dùng chung kiểu bánh xe cuộn: cuộn để chọn, thả tay là áp dụng. Hẹn giờ có hàng Tắt, các mức 5 đến 120 `min` (`min` là phút, ghi tắt để cả tiếng Anh lẫn tiếng Việt đều đọc được) và hàng **End** ở cuối cùng (dừng đúng lúc video hiện tại hết, không tự phát video kế, giống hẹn giờ gốc của YouTube); nút đổi màu khi đang hẹn giờ
 - Phát ngoài: mở video bằng trình phát hệ thống, Infuse hoặc VLC (Infuse và VLC cần cài sẵn). Trình phát hệ thống và Infuse bắt đầu từ thời điểm đang xem, VLC bắt đầu từ đầu; luồng thường chỉ 360p hoặc 720p
 - Tự thử lại khi video báo lỗi "Đã xảy ra lỗi"
 - Tắt tự động phát, tắt lặp Short, tắt tự cuộn sang Short kế
 
 ### Giao diện
-- **Tuỳ chỉnh tab:** đổi thứ tự, ẩn hoặc hiện tab (kể cả Shorts), thêm tab (Nhạc, Trực tiếp, Trò chơi, Tin tức, Thể thao, Học tập, Thời trang, Playlist, Lịch sử…), đổi tên, chọn tab mở đầu; nút tròn kính lỏng ở góc phải trên để khôi phục tab mặc định của YouTube (chạm hai lần); ở tab Shorts AutoAC không còn ép nền dock và chân video thành đen, thanh tab đồng bộ với các tab khác (lúc này nếu còn tối là do chính YouTube, báo dòng `[Dock Short]` trong Chẩn đoán)
+- **Tuỳ chỉnh tab:** bảng kéo thả cùng kiểu với Tuỳ chỉnh Overlay: hai dải icon ngang **TAB ĐANG HIỆN** và **TAB ĐANG ẨN**, nhấn giữ một tab rồi kéo để đổi thứ tự hoặc chuyển dải (nhiều tab thì tự xuống hàng). Chạm một tab để chọn, thẻ bên dưới có nút kính Hiện/Ẩn và Đổi tên; mục CHUNG gom tab mở đầu, nhãn, thu gọn, màu và kiểu thanh tab (kể cả Shorts), thêm tab (Nhạc, Trực tiếp, Trò chơi, Tin tức, Thể thao, Học tập, Thời trang, Playlist, Lịch sử…); nút tròn kính lỏng ở góc phải trên để khôi phục tab mặc định của YouTube (chạm hai lần)
+- **Shorts tràn xuống thanh tab** (Giao diện, thử nghiệm, mặc định bật): ở tab Shorts nền dưới video và thanh tab trong suốt (không trắng, không đen) và video kéo xuống tận thanh tab như các tab khác. Nếu Shorts bị lệch hoặc cuộn giật thì tắt công tắc; báo lại các dòng `[Dock Short]` và `[Short kéo xuống]` trong Chẩn đoán
+- **Kính lỏng thanh trên / bảng chọn / trình phát** (Giao diện, cần iOS 26, mặc định bật, mỗi phần một công tắc): nền kính lỏng sau cụm nút bên phải thanh trên và nút quay lại; thay nền đặc của bảng chọn, menu, hộp thoại; đổi nền mờ của các nút nổi trên trình phát. Ý tưởng theo ytkace (MIT)
 - Thanh tab kiểu Liquid Glass, thu nhỏ khi cuộn, đổi màu tab được chọn
 - Ẩn khỏi trang chủ: hàng video Short, bài đăng cộng đồng, thẻ gợi ý Mix, mục Chơi game
 - Ẩn hiệu ứng logo lúc mở app
@@ -124,13 +126,15 @@ The **(i)** page in the menu shows the build number (the `bản X.Y.Z` line), th
 
 ### Playback
 - A row of buttons right in the player, each with its own switch: speed (0.25x to 3x, long-press to return to normal speed), Picture in Picture, download icon, **sleep timer**, and **external player**
-- Speed and the sleep timer share the same scroll wheel: scroll to choose, release to apply. The timer offers an Off row, an **End of video** row (stops exactly when the current video ends and does not autoplay the next one, like YouTube's own timer) and 5 to 120 `min` (abbreviated so that both English and Vietnamese readers understand it); the button changes color while a timer is running
+- Speed and the sleep timer share the same scroll wheel: scroll to choose, release to apply. The timer offers an Off row, 5 to 120 `min` (abbreviated so that both English and Vietnamese readers understand it) and an **End** row last (stops exactly when the current video ends and does not autoplay the next one, like YouTube's own timer); the button changes color while a timer is running
 - External player: open the video in the system player, Infuse, or VLC (Infuse and VLC must be installed). The system player and Infuse start from the current time; VLC starts from the beginning. The stream is usually only 360p or 720p
 - Automatically retry when a video reports "An error occurred"
 - Disable autoplay, disable Short looping, disable auto-scroll to the next Short
 
 ### Appearance
-- **Customize tabs:** reorder, hide or show tabs (including Shorts), add tabs (Music, Live, Gaming, News, Sports, Learning, Fashion, Playlists, History…), rename them, choose the launch tab; the round glass button at the top right restores YouTube's default tabs (tap twice); on the Shorts tab AutoAC no longer forces the dock and the video footer to black, so the tab bar matches the other tabs (if it is still dark, that comes from YouTube itself; report the `[Dock Short]` line from Diagnostics)
+- **Customize tabs:** a drag-and-drop board in the same style as Customize Overlay: two horizontal icon strips, **VISIBLE TABS** and **HIDDEN TABS**; press and hold a tab and drag it to reorder or move it between strips (it wraps to more rows when there are many tabs). Tap a tab to select it; the card below has a glass Show/Hide pill and Rename; the GENERAL section holds the launch tab, labels, minimize, colors and tab bar style (including Shorts), add tabs (Music, Live, Gaming, News, Sports, Learning, Fashion, Playlists, History…); the round glass button at the top right restores YouTube's default tabs (tap twice)
+- **Shorts fill down to the tab bar** (Appearance, experimental, on by default): on the Shorts tab the area under the video and the tab bar are transparent (not white, not black) and the video extends down to the tab bar like on the other tabs. If Shorts looks misaligned or stutters, turn the switch off; report the `[Dock Short]` and `[Short kéo xuống]` lines from Diagnostics
+- **Liquid glass top bar / sheets / player** (Appearance, iOS 26 required, on by default, one switch each): a liquid-glass background behind the right-hand button group of the top bar and the Back button; replaces the solid background of sheets, menus and dialogs; turns the blurred backgrounds of the floating player buttons into liquid glass. Idea based on ytkace (MIT)
 - Liquid Glass tab bar, minimize on scroll, selected-tab color
 - Hide from the home feed: Short shelves, community posts, Mix suggestion cards, the Games section
 - Hide the logo animation at launch

@@ -20,7 +20,7 @@
 #import "BuildInfo.h"
 #endif
 #ifndef TWEAK_BUILD_VERSION
-#define TWEAK_BUILD_VERSION @"2.1.69"
+#define TWEAK_BUILD_VERSION @"2.1.70"
 #endif
 #ifndef TWEAK_UPSTREAM_COUNT
 #define TWEAK_UPSTREAM_COUNT 0
@@ -61,7 +61,7 @@ typedef id (^AutoACHookMaker)(IMP original, SEL selector);
 static BOOL AutoACHook(NSString *className, NSString *selectorName, BOOL classMethod,
                        const char *prefix, AutoACHookMaker maker);
 
-static NSString *const kCurrentBuildID = @"2.1.69";
+static NSString *const kCurrentBuildID = @"2.1.70";
 
 // ── Nhật ký lỗi: ghi dấu vết và nguyên nhân crash vào Documents/AutoAC_crash.log ──
 static int gTraceFD = -1;
@@ -145,6 +145,10 @@ static NSString *const kAskQualityKey = @"kDLAskQuality";       // hỏi chất 
 static NSString *const kShareAfterKey = @"kDLShareAfter";       // mở bảng chia sẻ sau khi tải
 static NSString *const kAskDestKey = @"kDLAskDest";             // hỏi nơi lưu (Ảnh / chia sẻ) trước khi tải video
 static NSString *const kHidePromosKey = @"kHidePromos";         // chặn popup khuyến mãi / nâng cấp Premium (cũng là khoá công tắc của NoYTPremium trong upstream.json)
+static NSString *const kShortsFullBleedKey = @"kShortsFullBleed";   // Shorts: dock trong suốt, video kéo xuống tận thanh tab (không còn dải trắng/đen)
+static NSString *const kGlassTopKey = @"kGlassTop";         // kính lỏng cho thanh trên (nút tìm kiếm/thông báo, nút quay lại)
+static NSString *const kGlassSheetKey = @"kGlassSheet";     // kính lỏng cho bảng chọn, hộp thoại
+static NSString *const kGlassPlayerKey = @"kGlassPlayer";   // kính lỏng cho các nền mờ của trình phát
 static NSString *const kHideMusicPremiumKey = @"kHideMusicPremium";   // ẩn thẻ mời dùng thử / mua YouTube Music Premium trong bảng tin
 static NSString *const kHidePaidPromoKey = @"kHidePaidPromo";   // ẩn nhãn "Có quảng cáo trả phí" trên trình phát
 static NSString *const kZoomFreeKey = @"kZoomUnlimited";        // phóng to video tự do bằng 2 ngón
@@ -2555,7 +2559,7 @@ static NSArray<NSString *> *AutoACAllPrefKeys(void) {
     NSMutableArray<NSString *> *collapsed = [NSMutableArray array];
     for (NSString *k in kPrefs.dictionaryRepresentation.allKeys) if ([k hasPrefix:@"kCollapsed."]) [collapsed addObject:k];
     return [collapsed arrayByAddingObjectsFromArray:@[kAutoClearCacheKey, kHideShortsKey, kYTXAdsKey, kYTXBackgroundKey, kLoopKey, kAutoplayOffKey, kAskQualityKey, kShareAfterKey,
-             kAskDestKey, kHidePromosKey, kHidePaidPromoKey, kHideMusicPremiumKey, kZoomFreeKey, kNoLaunchAnimKey, kOpenPausedKey, kStartRateKey, kDoubleTapKey,
+             kAskDestKey, kHidePromosKey, kHidePaidPromoKey, kHideMusicPremiumKey, kShortsFullBleedKey, kGlassTopKey, kGlassSheetKey, kGlassPlayerKey, kZoomFreeKey, kNoLaunchAnimKey, kOpenPausedKey, kStartRateKey, kDoubleTapKey,
              kShortsLikeKey, kShortsCommentKey, kShortsShareKey, kShortsSaveKey, kShortsRemixKey, kShortsSoundKey,
              kShortsPauseCardKey, kHideCommunityKey, kHideMixesKey, kHideGamesKey, kHideShopTagKey, kHideShortsShelfKey, kSponsorKey, kSponsorCatsKey, kSponsorAlertKey,
              kPlayerButtonKey, kCommentToolsKey, kPostImageKey, kPlayerFloatKey, kShortsNoScrollKey, kShortsNoLoopKey, kPlayFixKey, kNoAutoplayKey, kPlayerSpeedBtnKey, kPlayerPiPKey, kPlayerSleepBtnKey, kPlayerExternalKey, kOverlayTopKey, kOverlayBottomKey]];
@@ -5922,6 +5926,7 @@ static void ACGUpdatePivotBarVisibility(id receiver, SEL selector, UIScrollView 
 static const void *ACGShortsBackdropAssociation = &ACGShortsBackdropAssociation;
 static NSString *gACGShortsDockDiag;   // nền và kiểu giao diện của dock lần gần nhất ở tab Short (dòng [Dock Short] trong Chẩn đoán)
 
+// Ở tab Short: nền của khung chứa thanh tab (host) để TRONG SUỐT thay vì trắng/đen, trả lại nền cũ khi rời tab
 static void ACGApplyShortsBackdrop(UIView *bar, BOOL shorts) {
     UIView *host = bar.superview;
     if (host == nil) return;
@@ -5931,11 +5936,83 @@ static void ACGApplyShortsBackdrop(UIView *bar, BOOL shorts) {
             objc_setAssociatedObject(host, ACGShortsBackdropAssociation, host.backgroundColor ?: (id)NSNull.null,
                                      OBJC_ASSOCIATION_RETAIN_NONATOMIC);
         }
-        host.backgroundColor = UIColor.blackColor;
+        host.backgroundColor = UIColor.clearColor;
     } else if (saved != nil) {
         host.backgroundColor = saved == NSNull.null ? nil : saved;
         objc_setAssociatedObject(host, ACGShortsBackdropAssociation, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
+}
+
+// Video Short kéo xuống tận thanh tab: trang Short YouTube dừng ngay trên thanh tab nên bên dưới còn một dải (trắng khi sáng, đen khi tối).
+// Kéo dài khung của lớp gốc Short và đường từ danh sách cuộn tới lớp gốc thêm đúng bằng dải đó; lớp nút bên cạnh không bị đụng tới.
+static BOOL gACGShortsTabSelected = NO;
+static __weak UIView *gACGReelRoot = nil;
+static NSHashTable<UIView *> *gACGExtendedViews;
+static NSString *gACGShortsExtendDiag;
+static const void *ACGExtendedHeightAssociation = &ACGExtendedHeightAssociation;
+static const void *ACGExtendedGapAssociation = &ACGExtendedGapAssociation;
+
+static void ACGRestoreShortsExtension(void) {
+    for (UIView *view in gACGExtendedViews.allObjects) {
+        NSNumber *height = objc_getAssociatedObject(view, ACGExtendedHeightAssociation);
+        NSNumber *gap = objc_getAssociatedObject(view, ACGExtendedGapAssociation);
+        objc_setAssociatedObject(view, ACGExtendedHeightAssociation, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, ACGExtendedGapAssociation, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        if (height && gap && fabs(CGRectGetHeight(view.frame) - height.doubleValue) < 0.5) {   // YouTube đã tự đặt lại khung thì không trừ nữa
+            CGRect frame = view.frame;
+            frame.size.height -= gap.doubleValue;
+            view.frame = frame;
+        }
+    }
+    [gACGExtendedViews removeAllObjects];
+}
+
+static UIView *ACGFindPager(UIView *view, int depth) {
+    if ([view isKindOfClass:NSClassFromString(@"YTAsyncCollectionView")]) return view;
+    if (depth <= 0) return nil;
+    for (UIView *sub in view.subviews) {
+        UIView *found = ACGFindPager(sub, depth - 1);
+        if (found) return found;
+    }
+    return nil;
+}
+
+static void ACGExtendShortsRoot(UIView *root) {
+    if (!root || !gACGShortsTabSelected || ![kPrefs boolForKey:kShortsFullBleedKey]) return;
+    UIWindow *window = root.window;
+    if (!window) return;
+    CGFloat windowHeight = CGRectGetHeight(window.bounds);
+    CGRect rect = [root convertRect:root.bounds toView:nil];
+    CGFloat gap = windowHeight - CGRectGetMaxY(rect);
+    if (gap < 0.5 || gap > 160.0) return;   // đã tới đáy rồi, hoặc khung lạ: không đụng
+    UIView *pager = ACGFindPager(root, 3);
+    NSMutableArray<UIView *> *chain = [NSMutableArray array];
+    UIView *appView = nil;
+    for (UIView *view = root; view != nil && view != window && chain.count < 6; view = view.superview) {   // từ lớp gốc lên trên
+        if ([view isKindOfClass:NSClassFromString(@"YTAppView")]) { appView = view; break; }
+        CGRect r = [view convertRect:view.bounds toView:nil];
+        if (fabs(CGRectGetMaxY(r) - CGRectGetMaxY(rect)) > 1.5) break;
+        [chain addObject:view];
+    }
+    for (UIView *view = pager; view != nil && view != root; view = view.superview) {   // từ danh sách cuộn lên tới lớp gốc
+        CGRect r = [view convertRect:view.bounds toView:nil];
+        if (fabs(CGRectGetMaxY(r) - CGRectGetMaxY(rect)) > 1.5) break;
+        if (![chain containsObject:view]) [chain addObject:view];
+    }
+    if (!gACGExtendedViews) gACGExtendedViews = [NSHashTable weakObjectsHashTable];
+    NSMutableArray<NSString *> *names = [NSMutableArray array];
+    for (UIView *view in chain) {
+        CGRect frame = view.frame;
+        frame.size.height += gap;
+        view.frame = frame;
+        objc_setAssociatedObject(view, ACGExtendedHeightAssociation, @(CGRectGetHeight(frame)), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        objc_setAssociatedObject(view, ACGExtendedGapAssociation, @(gap), OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        [gACGExtendedViews addObject:view];
+        [names addObject:NSStringFromClass(view.class)];
+    }
+    gACGShortsExtendDiag = [NSString stringWithFormat:@"+%.0fpt cho %lu lớp: %@ · danh sách %@ · cửa sổ cao %.0f",
+        gap, (unsigned long)chain.count, [names componentsJoinedByString:@" < "], pager ? @"có" : @"không thấy", windowHeight];
+    (void)appView;
 }
 
 static BOOL ACGApplyPivotBarGlass(UIView *receiver, UIView *blur) {
@@ -6038,7 +6115,11 @@ static BOOL ACGApplyPivotBarGlass(UIView *receiver, UIView *blur) {
     glass.frame = frame;
     glass.layer.cornerRadius = CGRectGetHeight(frame) * 0.5;
     ACGUpdateMiniMask(receiver, frame);
-    ACGApplyShortsBackdrop(receiver, NO);   // AutoAC không còn làm tối dock ở Short: trả lại nền đã đổi ở bản cũ nếu có
+    gACGShortsTabSelected = onShorts;
+    BOOL fullBleed = onShorts && [kPrefs boolForKey:kShortsFullBleedKey];
+    ACGApplyShortsBackdrop(receiver, fullBleed);   // dock Short trong suốt (không trắng/đen); rời tab thì trả lại nền cũ
+    if (fullBleed) ACGExtendShortsRoot(gACGReelRoot);
+    else if (gACGExtendedViews.count) ACGRestoreShortsExtension();
     if (onShorts) {
         UIView *host = receiver.superview;
         CGFloat hr = 0, hg = 0, hb = 0, ha = 0;
@@ -6553,15 +6634,6 @@ void ACGInstallTabBarHooks(void) {
 static const void *ACGTabSwitchKey = &ACGTabSwitchKey;
 static NSString *const ACGTabConfigChangedNote = @"ACGTabConfigDidChange";
 
-static void ACGPresentChoice(UIViewController *host, UIView *source, NSString *title, NSArray<NSString *> *titles,
-                             NSUInteger selected, void (^pick)(NSUInteger)) {
-    (void)host;
-    NSMutableArray<NSString *> *labels = [NSMutableArray array];
-    for (NSUInteger i = 0; i < titles.count; i++) [labels addObject:i == selected ? [@"✓ " stringByAppendingString:titles[i]] : titles[i]];
-    AutoACSetPopAnchorFromView(source);
-    AutoACPresentSheet(title, nil, labels, ^(NSInteger index) { if (pick && index >= 0) pick((NSUInteger)index); });
-}
-
 static void ACGStartupDestinations(NSArray<NSString *> **outTitles, NSArray<NSString *> **outValues) {
     NSArray<NSArray<NSString *> *> *destinations = @[
         @[@"", AutoACT(@"Mặc định"), @""],
@@ -6661,11 +6733,6 @@ static void ACGRefreshPivotLabels(void) {
     }
 }
 
-@interface ACGTabEditorController : UITableViewController <UIColorPickerViewControllerDelegate>
-@property (nonatomic, strong) NSMutableArray<NSMutableDictionary *> *activeTabs;
-@property (nonatomic, strong) NSMutableArray<NSMutableDictionary *> *inactiveTabs;
-@end
-
 // Hộp chọn dạng thả xuống: chạm vào hộp mở danh sách để chọn; chạm ngoài hộp không có phản hồi
 // Hộp chọn kính lỏng: chạm vào hộp mở danh sách nổi lên giữa màn hình; mục đang chọn tô màu xanh (không dùng dấu ✓)
 static UIView *ACGValueMenu(NSString *text, NSArray<NSString *> *titles, NSUInteger selected, void (^pick)(NSUInteger)) {
@@ -6697,442 +6764,6 @@ static UIView *ACGValueMenu(NSString *text, NSArray<NSString *> *titles, NSUInte
 // Tab YouTube hiển thị mặc định là Trang chủ, Shorts, Tạo, Kênh đăng ký, Bạn; các tab dưới đây là tab phụ do AutoAC thêm, mặc định ẩn
 static NSArray<NSString *> *ACGExtraTabTokens(void) {
     return @[@"music", @"live", @"gaming", @"news", @"sports", @"learning", @"fashion", @"playlists", @"history", @"notifications", @"watchlater", @"posts"];
-}
-
-@implementation ACGTabEditorController
-
-- (NSArray<NSString *> *)mainRows {
-    BOOL liquid = ACGLiquidGlassAvailable();
-    // "Bật nhãn tab" luôn đứng đầu; các mục còn lại xếp A-Z theo tên hiển thị:
-    // Kiểu màu, Kiểu màu tab, Thanh tab, Thu nhỏ khi cuộn
-    NSMutableArray<NSString *> *rows = [NSMutableArray arrayWithObject:@"labels"];
-    if (liquid) [rows addObject:@"minimize"];
-    [rows addObjectsFromArray:@[@"tintColor", @"tint"]];
-    if (liquid) [rows addObject:@"glass"];
-    return rows;
-}
-
-- (instancetype)init { return [super initWithStyle:UITableViewStylePlain]; }
-
-- (void)viewDidLoad {
-    [super viewDidLoad];
-    self.title = AutoACT(@"Tuỳ chỉnh tab");
-    self.tableView.cellLayoutMarginsFollowReadableWidth = NO;
-    self.tableView.separatorStyle = UITableViewCellSeparatorStyleSingleLine;
-    self.tableView.separatorColor = [UIColor.labelColor colorWithAlphaComponent:0.12];
-    self.tableView.separatorInset = UIEdgeInsetsMake(0, 16, 0, 0);
-    self.tableView.rowHeight = 44.0;
-    self.tableView.estimatedRowHeight = 0;
-    self.tableView.estimatedSectionHeaderHeight = 0;
-    self.tableView.estimatedSectionFooterHeight = 0;
-    self.tableView.sectionFooterHeight = 0;
-    self.tableView.backgroundColor = UIColor.clearColor;
-    self.tableView.opaque = NO;
-    self.tableView.sectionHeaderTopPadding = 0.0;
-    [self loadTabs];
-    [self setEditing:YES animated:NO];
-    self.tableView.allowsSelectionDuringEditing = YES;
-}
-
-- (void)tableView:(UITableView *)tableView willDisplayCell:(UITableViewCell *)cell forRowAtIndexPath:(NSIndexPath *)indexPath {
-    cell.backgroundColor = UIColor.clearColor;
-}
-
-- (void)finish { [self dismissViewControllerAnimated:YES completion:nil]; }
-
-- (void)viewWillAppear:(BOOL)animated {
-    [super viewWillAppear:animated];
-    self.tableView.backgroundColor = UIColor.clearColor;
-    [self.tableView reloadData];
-}
-
-- (NSMutableDictionary *)tab:(NSString *)token title:(NSString *)title symbol:(NSString *)symbol key:(NSString *)key {
-    return [@{@"token": token, @"title": title, @"symbol": symbol, @"key": key} mutableCopy];
-}
-
-- (void)loadTabs {
-    NSArray *defaults = @[
-        [self tab:@"home" title:AutoACT(@"Trang chủ") symbol:@"house" key:@"ACG.Preference.Tabs.Hidden.Home"],
-        [self tab:@"shorts" title:@"Shorts" symbol:@"play.rectangle" key:@"ACG.Preference.Tabs.Hidden.Shorts"],
-        [self tab:@"create" title:AutoACT(@"Tạo") symbol:@"plus.circle" key:@"ACG.Preference.Tabs.Hidden.Create"],
-        [self tab:@"subscriptions" title:AutoACT(@"Kênh đăng ký") symbol:@"rectangle.stack" key:@"ACG.Preference.Tabs.Hidden.Subscriptions"],
-        [self tab:@"library" title:AutoACT(@"Bạn") symbol:@"person.circle" key:@"ACG.Preference.Tabs.Hidden.Library"],
-        [self tab:@"music" title:AutoACT(@"Nhạc") symbol:@"music.note" key:@"ACG.Preference.Tabs.Hidden.Music"],
-        [self tab:@"live" title:AutoACT(@"Trực tiếp") symbol:@"dot.radiowaves.left.and.right" key:@"ACG.Preference.Tabs.Hidden.Live"],
-        [self tab:@"gaming" title:AutoACT(@"Trò chơi") symbol:@"gamecontroller" key:@"ACG.Preference.Tabs.Hidden.Gaming"],
-        [self tab:@"news" title:AutoACT(@"Tin tức") symbol:@"newspaper" key:@"ACG.Preference.Tabs.Hidden.News"],
-        [self tab:@"posts" title:AutoACT(@"Bài đăng") symbol:@"bubble.left.and.bubble.right" key:@"ACG.Preference.Tabs.Hidden.Posts"],
-        [self tab:@"sports" title:AutoACT(@"Thể thao") symbol:@"trophy" key:@"ACG.Preference.Tabs.Hidden.Sports"],
-        [self tab:@"learning" title:AutoACT(@"Học tập") symbol:@"graduationcap" key:@"ACG.Preference.Tabs.Hidden.Learning"],
-        [self tab:@"fashion" title:AutoACT(@"Thời trang") symbol:@"tshirt" key:@"ACG.Preference.Tabs.Hidden.Fashion"],
-        [self tab:@"playlists" title:@"Playlist" symbol:@"music.note.list" key:@"ACG.Preference.Tabs.Hidden.Playlists"],
-        [self tab:@"history" title:AutoACT(@"Lịch sử") symbol:@"clock.arrow.circlepath" key:@"ACG.Preference.Tabs.Hidden.History"],
-        [self tab:@"notifications" title:AutoACT(@"Thông báo") symbol:@"bell" key:@"ACG.Preference.Tabs.Hidden.Notifs"],
-        [self tab:@"watchlater" title:AutoACT(@"Xem sau") symbol:@"clock" key:@"ACG.Preference.Tabs.Hidden.WatchLater"]
-    ];
-    self.activeTabs = [NSMutableArray array];
-    self.inactiveTabs = [NSMutableArray array];
-    NSArray *extras = ACGExtraTabTokens();
-    for (NSMutableDictionary *tab in defaults) {
-        BOOL initiallyInactive = [extras containsObject:tab[@"token"]];
-        id stored = ACGPreferenceObject(tab[@"key"]);
-        BOOL hidden = [stored respondsToSelector:@selector(boolValue)] ? [stored boolValue] : initiallyInactive;
-        ACGSetPreference(tab[@"key"], hidden);
-        [(hidden ? self.inactiveTabs : self.activeTabs) addObject:tab];
-    }
-    NSArray *order = [kPrefs arrayForKey:@"ACG.Preference.Tabs.Order"];
-    if (order.count != 0) {
-        [self.activeTabs sortUsingComparator:^NSComparisonResult(NSDictionary *left, NSDictionary *right) {
-            NSUInteger l = [order indexOfObject:left[@"token"]], r = [order indexOfObject:right[@"token"]];
-            l = l == NSNotFound ? NSUIntegerMax : l;
-            r = r == NSNotFound ? NSUIntegerMax : r;
-            return l < r ? NSOrderedAscending : (l > r ? NSOrderedDescending : NSOrderedSame);
-        }];
-    }
-}
-
-- (NSInteger)numberOfSectionsInTableView:(UITableView *)tableView { return 4; }
-
-- (NSInteger)tableView:(UITableView *)tableView numberOfRowsInSection:(NSInteger)section {
-    if (section == 0) return (NSInteger)[self mainRows].count;
-    if (section == 1) return 1;
-    if (section == 2) return (NSInteger)self.activeTabs.count;
-    return (NSInteger)self.inactiveTabs.count;
-}
-
-- (NSString *)tableView:(UITableView *)tableView titleForHeaderInSection:(NSInteger)section {
-    if (section == 0) return AutoACT(@"CHUNG");
-    if (section == 2) return AutoACT(@"TAB ĐANG HIỆN");
-    if (section == 3) return AutoACT(@"TAB ĐANG ẨN");
-    return nil;
-}
-
-- (CGFloat)tableView:(UITableView *)tableView heightForHeaderInSection:(NSInteger)section { return section == 1 ? 0.01 : 30.0; }
-- (CGFloat)tableView:(UITableView *)tableView heightForRowAtIndexPath:(NSIndexPath *)indexPath { return (indexPath.section == 0 || indexPath.section == 1) ? 58.0 : 44.0; }
-- (CGFloat)tableView:(UITableView *)tableView heightForFooterInSection:(NSInteger)section { return 0.01; }
-
-- (void)tableView:(UITableView *)tableView willDisplayHeaderView:(UIView *)view forSection:(NSInteger)section {
-    UITableViewHeaderFooterView *header = (UITableViewHeaderFooterView *)view;
-    header.backgroundView = [[UIView alloc] init];   // nền trong suốt để thấy kính của khung
-    header.contentView.backgroundColor = UIColor.clearColor;
-    header.textLabel.font = [UIFont systemFontOfSize:11.0];
-    header.textLabel.textColor = UIColor.secondaryLabelColor;
-}
-
-- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
-    NSString *identifier = indexPath.section < 2 ? @"ACGTabOption" : @"ACGTabItem";
-    UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:identifier];
-    if (cell == nil) cell = [[UITableViewCell alloc] initWithStyle:UITableViewCellStyleSubtitle reuseIdentifier:identifier];
-    cell.textLabel.text = nil;
-    cell.detailTextLabel.text = nil;
-    cell.imageView.image = nil;
-    cell.accessoryView = nil;
-    cell.editingAccessoryView = nil;
-    cell.accessoryType = UITableViewCellAccessoryNone;
-    cell.editingAccessoryType = UITableViewCellAccessoryNone;
-    cell.textLabel.font = [UIFont systemFontOfSize:16.0 weight:UIFontWeightMedium];
-    cell.backgroundColor = UIColor.clearColor;
-    cell.textLabel.textColor = UIColor.labelColor;
-    cell.detailTextLabel.textColor = UIColor.secondaryLabelColor;
-    cell.detailTextLabel.font = [UIFont systemFontOfSize:12.0];
-    cell.indentationLevel = 0;
-
-    NSString *row = indexPath.section == 0 ? [self mainRows][(NSUInteger)indexPath.row] : nil;
-    if ([row isEqualToString:@"labels"]) {
-        cell.textLabel.text = AutoACT(@"Bật nhãn");
-        cell.detailTextLabel.text = AutoACT(@"Hiện tên dưới icon");
-        UISwitch *toggle = [UISwitch new];
-        toggle.transform = CGAffineTransformMakeScale(0.95, 0.95);
-        toggle.onTintColor = UIColor.systemGreenColor;
-        NSString *key = @"ACG.Preference.Tabs.LabelsHidden";   // khoá lưu trạng thái ẨN nhãn, nên công tắc đảo ngược
-        toggle.on = ![ACGPreferenceObject(key) boolValue];
-        objc_setAssociatedObject(toggle, ACGTabSwitchKey, key, OBJC_ASSOCIATION_COPY_NONATOMIC);
-        [toggle addTarget:self action:@selector(toggleChanged:) forControlEvents:UIControlEventValueChanged];
-        cell.accessoryView = toggle;
-        cell.editingAccessoryView = toggle;
-        cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        return cell;
-    }
-    if ([row isEqualToString:@"glass"]) {
-        cell.textLabel.text = AutoACT(@"Kiểu thanh tab");
-        cell.detailTextLabel.text = AutoACT(@"Mặc định hoặc Glass");
-        {
-            __weak ACGTabEditorController *weakSelf = self;
-            UIView *pill = ACGValueMenu(ACGTabBarGlassMode() == 1 ? @"Glass" : AutoACT(@"Mặc định"), @[AutoACT(@"Mặc định"), @"Glass"], ACGTabBarGlassMode() == 1 ? 1 : 0, ^(NSUInteger index) {
-                ACGSetPreferenceObject(@"ACG.Preference.Tabs.GlassMode", @(index));
-                [weakSelf.tableView reloadData];
-                ACGRefreshPivotBarBackground();
-                AutoACRestartHint();
-            });
-            cell.accessoryView = pill; cell.editingAccessoryView = pill; cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        }
-        return cell;
-    }
-    if ([row isEqualToString:@"minimize"]) {
-        cell.textLabel.text = AutoACT(@"Bật thu gọn");
-        cell.detailTextLabel.text = AutoACT(@"Thu nhỏ khi cuộn");
-        UISwitch *toggle = [UISwitch new];
-        toggle.transform = CGAffineTransformMakeScale(0.95, 0.95);
-        toggle.onTintColor = UIColor.systemGreenColor;
-        NSString *key = @"ACG.Preference.Tabs.GlassMinimize";
-        toggle.on = [ACGPreferenceObject(key) boolValue];
-        objc_setAssociatedObject(toggle, ACGTabSwitchKey, key, OBJC_ASSOCIATION_COPY_NONATOMIC);
-        [toggle addTarget:self action:@selector(toggleChanged:) forControlEvents:UIControlEventValueChanged];
-        cell.accessoryView = toggle;
-        cell.editingAccessoryView = toggle;
-        cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        return cell;
-    }
-    if ([row isEqualToString:@"tint"]) {
-        cell.textLabel.text = AutoACT(@"Kiểu màu tab");
-        cell.detailTextLabel.text = AutoACT(@"Màu chữ, icon tab chọn");
-        {
-            __weak ACGTabEditorController *weakSelf = self;
-            NSArray<NSString *> *tintTitles = @[AutoACT(@"Tắt"), AutoACT(@"Chỉ chữ"), @"Icon-text"];
-            UIView *pill = ACGValueMenu(tintTitles[ACGTintIndex()], tintTitles, ACGTintIndex(), ^(NSUInteger index) {
-                ACGSetPreferenceObject(@"ACG.Preference.Tabs.SelectedTint", @(index));
-                [weakSelf.tableView reloadData];
-                ACGRefreshPivotBarBackground();
-            });
-            cell.accessoryView = pill; cell.editingAccessoryView = pill; cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        }
-        return cell;
-    }
-    if ([row isEqualToString:@"tintColor"]) {
-        cell.textLabel.text = AutoACT(@"Kiểu màu");
-        cell.detailTextLabel.text = AutoACT(@"Màu tab đang chọn");
-        UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 28, 28)];
-        dot.backgroundColor = ACGTintSwatchColor();
-        dot.layer.cornerRadius = 14.0;
-        dot.layer.borderWidth = 2.0;
-        dot.layer.borderColor = UIColor.secondaryLabelColor.CGColor;
-        cell.accessoryView = dot;
-        cell.editingAccessoryView = dot;
-        return cell;
-    }
-    if (indexPath.section == 1) {
-        cell.textLabel.text = AutoACT(@"Tab khi mở app");
-        cell.detailTextLabel.text = AutoACT(@"Tab hiện khi mở app");
-        NSArray<NSString *> *titles = nil, *values = nil;
-        ACGStartupDestinations(&titles, &values);
-        NSUInteger index = [values indexOfObject:ACGPreferenceObject(@"ACG.Preference.Tabs.Startup") ?: @""];
-        {
-            __weak ACGTabEditorController *weakSelf = self;
-            NSUInteger cur = (index != NSNotFound && index < titles.count) ? index : 0;
-            NSArray<NSString *> *vals = values;
-            UIView *pill = ACGValueMenu(titles[cur], titles, cur, ^(NSUInteger pickIndex) {
-                ACGSetPreferenceObject(@"ACG.Preference.Tabs.Startup", vals[pickIndex]);
-                [weakSelf.tableView reloadData];
-                AutoACRestartHint();
-            });
-            cell.accessoryView = pill; cell.editingAccessoryView = pill; cell.selectionStyle = UITableViewCellSelectionStyleNone;
-        }
-        return cell;
-    }
-
-    NSDictionary *tab = indexPath.section == 2 ? self.activeTabs[(NSUInteger)indexPath.row] : self.inactiveTabs[(NSUInteger)indexPath.row];
-    NSString *token = tab[@"token"];
-    NSDictionary *customNames = [kPrefs dictionaryForKey:@"ACG.Preference.Tabs.Names"];
-    NSString *custom = customNames[token];
-    cell.textLabel.text = (custom.length != 0 && ![custom isEqualToString:tab[@"title"]])
-        ? [NSString stringWithFormat:@"%@ (%@)", tab[@"title"], custom] : tab[@"title"];
-    cell.imageView.image = [[UIImage systemImageNamed:tab[@"symbol"]] imageWithRenderingMode:UIImageRenderingModeAlwaysTemplate];
-    cell.imageView.tintColor = UIColor.labelColor;
-    cell.showsReorderControl = indexPath.section == 2;
-    return cell;
-}
-
-- (void)saveTintColor:(UIColor *)color {
-    if (color == nil) return;
-    ACGSetPreferenceObject(@"ACG.Preference.Tabs.SelectedTintColor", ACGTintHexFromColor(color));
-    NSUInteger row = [[self mainRows] indexOfObject:@"tintColor"];
-    if (row != NSNotFound) {
-        [self.tableView reloadRowsAtIndexPaths:@[[NSIndexPath indexPathForRow:(NSInteger)row inSection:0]] withRowAnimation:UITableViewRowAnimationNone];
-    }
-    ACGRefreshPivotBarBackground();
-}
-
-- (void)colorPickerViewController:(UIColorPickerViewController *)viewController didSelectColor:(UIColor *)color continuously:(BOOL)continuously {
-    if (!continuously) [self saveTintColor:color];
-}
-- (void)colorPickerViewControllerDidFinish:(UIColorPickerViewController *)viewController { [self saveTintColor:viewController.selectedColor]; }
-
-- (void)toggleChanged:(UISwitch *)sender {
-    NSString *key = objc_getAssociatedObject(sender, ACGTabSwitchKey);
-    BOOL isLabelsKey = [key isEqualToString:@"ACG.Preference.Tabs.LabelsHidden"];
-    ACGSetPreference(key, isLabelsKey ? !sender.isOn : sender.isOn);
-    [kPrefs synchronize];
-    ACGRefreshPivotBarBackground();
-    if (isLabelsKey) ACGRefreshPivotLabels();   // đổi nhãn có hiệu lực ngay, chạy sau cùng để không bị nền ghi đè
-}
-
-- (BOOL)tableView:(UITableView *)tableView shouldIndentWhileEditingRowAtIndexPath:(NSIndexPath *)indexPath { return indexPath.section >= 2; }
-
-- (UITableViewCellEditingStyle)tableView:(UITableView *)tableView editingStyleForRowAtIndexPath:(NSIndexPath *)indexPath {
-    if (indexPath.section == 2) return UITableViewCellEditingStyleDelete;
-    if (indexPath.section == 3) return UITableViewCellEditingStyleInsert;
-    return UITableViewCellEditingStyleNone;
-}
-
-- (BOOL)tableView:(UITableView *)tableView canMoveRowAtIndexPath:(NSIndexPath *)indexPath { return indexPath.section == 2; }
-
-- (NSIndexPath *)tableView:(UITableView *)tableView targetIndexPathForMoveFromRowAtIndexPath:(NSIndexPath *)source toProposedIndexPath:(NSIndexPath *)proposed {
-    if (proposed.section != 2) return [NSIndexPath indexPathForRow:MAX(0, (NSInteger)self.activeTabs.count - 1) inSection:2];
-    return proposed;
-}
-
-- (void)tableView:(UITableView *)tableView moveRowAtIndexPath:(NSIndexPath *)source toIndexPath:(NSIndexPath *)destination {
-    NSMutableDictionary *tab = self.activeTabs[(NSUInteger)source.row];
-    [self.activeTabs removeObjectAtIndex:(NSUInteger)source.row];
-    [self.activeTabs insertObject:tab atIndex:(NSUInteger)destination.row];
-    [self saveOrder];
-    AutoACRestartHint();
-}
-
-- (void)tableView:(UITableView *)tableView commitEditingStyle:(UITableViewCellEditingStyle)style forRowAtIndexPath:(NSIndexPath *)indexPath {
-    NSMutableDictionary *tab = style == UITableViewCellEditingStyleDelete ? self.activeTabs[(NSUInteger)indexPath.row] : self.inactiveTabs[(NSUInteger)indexPath.row];
-    if (style == UITableViewCellEditingStyleDelete) {
-        [self.activeTabs removeObjectAtIndex:(NSUInteger)indexPath.row];
-        [self.inactiveTabs addObject:tab];
-    } else if (style == UITableViewCellEditingStyleInsert) {
-        [self.inactiveTabs removeObjectAtIndex:(NSUInteger)indexPath.row];
-        [self.activeTabs addObject:tab];
-    }
-    ACGSetPreference(tab[@"key"], style == UITableViewCellEditingStyleDelete);
-    [self saveOrder];
-    [tableView reloadSections:[NSIndexSet indexSetWithIndexesInRange:NSMakeRange(2, 2)] withRowAnimation:UITableViewRowAnimationAutomatic];
-    AutoACRestartHint();
-}
-
-// Đưa tập tab, thứ tự, tên riêng và tab khi mở app về như YouTube gốc (kiểu thanh tab, nhãn, màu giữ nguyên)
-- (void)restoreYouTubeDefaults {
-    NSArray<NSString *> *extras = ACGExtraTabTokens();
-    for (NSDictionary *tab in [self.activeTabs arrayByAddingObjectsFromArray:self.inactiveTabs]) {
-        ACGSetPreference(tab[@"key"], [extras containsObject:tab[@"token"]]);
-    }
-    [kPrefs removeObjectForKey:@"ACG.Preference.Tabs.Order"];
-    [kPrefs removeObjectForKey:@"ACG.Preference.Tabs.Names"];
-    [kPrefs removeObjectForKey:@"ACG.Preference.Tabs.Startup"];
-    [self loadTabs];
-    [self.tableView reloadData];
-    [NSNotificationCenter.defaultCenter postNotificationName:ACGTabConfigChangedNote object:nil];
-    ACGRefreshPivotBarBackground();
-    ACGRefreshPivotLabels();
-    AutoACRestartHint();
-}
-
-- (void)saveOrder {
-    NSMutableArray *order = [NSMutableArray array];
-    for (NSDictionary *tab in self.activeTabs) [order addObject:tab[@"token"]];
-    [kPrefs setObject:order forKey:@"ACG.Preference.Tabs.Order"];
-    [NSNotificationCenter.defaultCenter postNotificationName:ACGTabConfigChangedNote object:nil];
-}
-
-- (void)tableView:(UITableView *)tableView didSelectRowAtIndexPath:(NSIndexPath *)indexPath {
-    [tableView deselectRowAtIndexPath:indexPath animated:YES];
-    UITableViewCell *cell = [tableView cellForRowAtIndexPath:indexPath];
-    NSString *row = indexPath.section == 0 ? [self mainRows][(NSUInteger)indexPath.row] : nil;
-    if ([row isEqualToString:@"glass"] || [row isEqualToString:@"tint"] || indexPath.section == 1) return;   // đã chuyển sang hộp thả xuống
-    if ([row isEqualToString:@"glass"]) {
-        ACGPresentChoice(AutoACTopViewController(), cell, AutoACT(@"Thanh tab"), @[AutoACT(@"Mặc định"), @"Glass"], ACGTabBarGlassMode() == 1 ? 1 : 0, ^(NSUInteger index) {
-            ACGSetPreferenceObject(@"ACG.Preference.Tabs.GlassMode", @(index));
-            [self.tableView reloadData];
-            ACGRefreshPivotBarBackground();
-            AutoACRestartHint();
-        });
-        return;
-    }
-    if ([row isEqualToString:@"tint"]) {
-        ACGPresentChoice(AutoACTopViewController(), cell, AutoACT(@"Kiểu màu tab"), @[AutoACT(@"Tắt"), AutoACT(@"Chỉ chữ"), @"Icon-text"], ACGTintIndex(), ^(NSUInteger index) {
-            ACGSetPreferenceObject(@"ACG.Preference.Tabs.SelectedTint", @(index));
-            [self.tableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationNone];
-            ACGRefreshPivotBarBackground();
-        });
-        return;
-    }
-    if ([row isEqualToString:@"tintColor"]) {
-        UIColorPickerViewController *picker = [UIColorPickerViewController new];
-        picker.title = AutoACT(@"Kiểu màu");
-        picker.supportsAlpha = NO;
-        picker.selectedColor = ACGTintSwatchColor();
-        picker.delegate = self;
-        [AutoACTopViewController() presentViewController:picker animated:YES completion:nil];
-        return;
-    }
-    if (indexPath.section == 1) {
-        NSArray<NSString *> *titles = nil, *values = nil;
-        ACGStartupDestinations(&titles, &values);
-        NSUInteger current = [values indexOfObject:ACGPreferenceObject(@"ACG.Preference.Tabs.Startup") ?: @""];
-        ACGPresentChoice(AutoACTopViewController(), cell, AutoACT(@"Tab khi mở app"), titles, current == NSNotFound ? 0 : current, ^(NSUInteger index) {
-            ACGSetPreferenceObject(@"ACG.Preference.Tabs.Startup", values[index]);
-            [self.tableView reloadRowsAtIndexPaths:@[indexPath] withRowAnimation:UITableViewRowAnimationNone];
-            AutoACRestartHint();
-        });
-    } else if (indexPath.section == 2) {
-        NSMutableDictionary *tab = self.activeTabs[(NSUInteger)indexPath.row];
-        NSString *token = tab[@"token"];
-        NSDictionary *names = [kPrefs dictionaryForKey:@"ACG.Preference.Tabs.Names"];
-        UIAlertController *alert = [UIAlertController alertControllerWithTitle:AutoACT(@"Đổi tên tab")
-            message:AutoACT(@"Để trống để dùng lại tên mặc định.") preferredStyle:UIAlertControllerStyleAlert];
-        [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
-            field.placeholder = tab[@"title"];
-            field.text = names[token];
-            field.clearButtonMode = UITextFieldViewModeWhileEditing;
-        }];
-        [alert addAction:[UIAlertAction actionWithTitle:AutoACT(@"Huỷ") style:UIAlertActionStyleCancel handler:nil]];
-        [alert addAction:[UIAlertAction actionWithTitle:AutoACT(@"Lưu") style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
-            NSMutableDictionary *updated = [names mutableCopy] ?: [NSMutableDictionary dictionary];
-            NSString *value = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
-            if (value.length == 0) [updated removeObjectForKey:token]; else updated[token] = value;
-            [kPrefs setObject:updated forKey:@"ACG.Preference.Tabs.Names"];
-            [NSNotificationCenter.defaultCenter postNotificationName:ACGTabConfigChangedNote object:nil];
-            [self.tableView reloadData];
-            AutoACRestartHint();
-        }]];
-        [AutoACTopViewController() presentViewController:alert animated:YES completion:nil];
-    }
-}
-
-@end
-
-// Trang Tuỳ chỉnh tab dùng cùng khung kính, nút "<" quay lại menu và nút Xong với các bảng phụ khác (AutoACShowPanel)
-static ACGTabEditorController *gACGTabEditor;   // giữ bộ điều khiển (nguồn dữ liệu của bảng) khi khung đang mở
-
-static void ACGPresentTabEditor(void) {
-    UIWindow *window = AutoACKeyWindow();
-    if (!window || gMenu) return;
-    ACGTabEditorController *editor = [ACGTabEditorController new];
-    gACGTabEditor = editor;
-    UITableView *table = editor.tableView;
-    table.translatesAutoresizingMaskIntoConstraints = NO;
-    UIView *holder = [[UIView alloc] init];   // chừa lề hai bên: khung kính bo tròn nên chữ không được sát mép
-    [holder addSubview:table];
-    [NSLayoutConstraint activateConstraints:@[
-        [table.topAnchor constraintEqualToAnchor:holder.topAnchor],
-        [table.bottomAnchor constraintEqualToAnchor:holder.bottomAnchor],
-        [table.leadingAnchor constraintEqualToAnchor:holder.leadingAnchor constant:14],
-        [table.trailingAnchor constraintEqualToAnchor:holder.trailingAnchor constant:-14],
-    ]];
-    holder.translatesAutoresizingMaskIntoConstraints = NO;
-    NSLayoutConstraint *wish = [holder.heightAnchor constraintEqualToConstant:4000];   // muốn cao tối đa, khung tự giới hạn theo màn hình
-    wish.priority = UILayoutPriorityDefaultLow;
-    wish.active = YES;
-    // Nút khôi phục: icon kính tròn bên phải đầu khung (như Sponsor block); hai chạm để tránh lỡ tay làm mất bố cục đã sắp
-    AutoACShowPanel(AutoACT(@"Tuỳ chỉnh tab"), AutoACT(@"Thứ tự, ẩn hiện, Liquid Glass"), holder, window.safeAreaInsets.top + 12,
-                    AutoACT(@"Khôi phục tab mặc định"), ^{
-        static CFTimeInterval armedAt = 0;
-        CFTimeInterval now = CACurrentMediaTime();
-        if (armedAt > 0 && now - armedAt < 4.0) {
-            armedAt = 0;
-            [gACGTabEditor restoreYouTubeDefaults];
-            [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
-            AutoACShowHub(@"arrow.counterclockwise", UIColor.systemGreenColor, AutoACT(@"Đã khôi phục tab mặc định"), nil, 2.0);
-            return;
-        }
-        armedAt = now;
-        [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeWarning];
-        AutoACShowHub(@"arrow.counterclockwise", UIColor.systemOrangeColor, AutoACT(@"Chạm lần nữa để khôi phục tab"), AutoACT(@"Trong 4 giây"), 3.0);
-    });
 }
 
 static NSString *ACGDiagnosticsLine(void) {
@@ -7789,6 +7420,808 @@ static void AutoACPresentOverlayEditor(void) {
 }
 
 
+
+#pragma mark - Tuỳ chỉnh tab (bảng kéo thả, cùng kiểu với Tuỳ chỉnh Overlay)
+
+// Danh sách tab: mã, tên mặc định, biểu tượng, khoá lưu trạng thái ẨN
+static NSArray<NSDictionary *> *ACGTabCatalog(void) {
+    NSArray<NSArray<NSString *> *> *rows = @[
+        @[@"home", AutoACT(@"Trang chủ"), @"house", @"ACG.Preference.Tabs.Hidden.Home"],
+        @[@"shorts", @"Shorts", @"play.rectangle", @"ACG.Preference.Tabs.Hidden.Shorts"],
+        @[@"create", AutoACT(@"Tạo"), @"plus.circle", @"ACG.Preference.Tabs.Hidden.Create"],
+        @[@"subscriptions", AutoACT(@"Kênh đăng ký"), @"rectangle.stack", @"ACG.Preference.Tabs.Hidden.Subscriptions"],
+        @[@"library", AutoACT(@"Bạn"), @"person.circle", @"ACG.Preference.Tabs.Hidden.Library"],
+        @[@"music", AutoACT(@"Nhạc"), @"music.note", @"ACG.Preference.Tabs.Hidden.Music"],
+        @[@"live", AutoACT(@"Trực tiếp"), @"dot.radiowaves.left.and.right", @"ACG.Preference.Tabs.Hidden.Live"],
+        @[@"gaming", AutoACT(@"Trò chơi"), @"gamecontroller", @"ACG.Preference.Tabs.Hidden.Gaming"],
+        @[@"news", AutoACT(@"Tin tức"), @"newspaper", @"ACG.Preference.Tabs.Hidden.News"],
+        @[@"posts", AutoACT(@"Bài đăng"), @"bubble.left.and.bubble.right", @"ACG.Preference.Tabs.Hidden.Posts"],
+        @[@"sports", AutoACT(@"Thể thao"), @"trophy", @"ACG.Preference.Tabs.Hidden.Sports"],
+        @[@"learning", AutoACT(@"Học tập"), @"graduationcap", @"ACG.Preference.Tabs.Hidden.Learning"],
+        @[@"fashion", AutoACT(@"Thời trang"), @"tshirt", @"ACG.Preference.Tabs.Hidden.Fashion"],
+        @[@"playlists", @"Playlist", @"music.note.list", @"ACG.Preference.Tabs.Hidden.Playlists"],
+        @[@"history", AutoACT(@"Lịch sử"), @"clock.arrow.circlepath", @"ACG.Preference.Tabs.Hidden.History"],
+        @[@"notifications", AutoACT(@"Thông báo"), @"bell", @"ACG.Preference.Tabs.Hidden.Notifs"],
+        @[@"watchlater", AutoACT(@"Xem sau"), @"clock", @"ACG.Preference.Tabs.Hidden.WatchLater"],
+    ];
+    NSMutableArray<NSDictionary *> *list = [NSMutableArray array];
+    for (NSArray<NSString *> *r in rows) [list addObject:@{@"id": r[0], @"title": r[1], @"symbol": r[2], @"key": r[3]}];
+    return list;
+}
+
+static NSDictionary *ACGTabEntry(NSString *token) {
+    for (NSDictionary *e in ACGTabCatalog()) if ([e[@"id"] isEqualToString:token]) return e;
+    return nil;
+}
+
+// Tên đang dùng cho tab (tên riêng nếu có, không thì tên mặc định)
+static NSString *ACGTabDisplayName(NSDictionary *entry) {
+    NSString *custom = [kPrefs dictionaryForKey:@"ACG.Preference.Tabs.Names"][entry[@"id"]];
+    return custom.length ? custom : entry[@"title"];
+}
+
+static const CGFloat kTabChipW = 58.0, kTabRowPitch = 76.0;
+
+// Số nút mỗi hàng và khoảng cách giữa các nút (dải tự xuống hàng khi nhiều tab)
+static void ACGTabMetrics(CGFloat boardWidth, NSInteger *perRow, CGFloat *gap) {
+    CGFloat inner = boardWidth - 24.0, g = 6.0;
+    NSInteger n = MAX(1, (NSInteger)floor((inner + g) / (kTabChipW + g)));
+    CGFloat spare = inner - n * kTabChipW;
+    CGFloat spread = n > 1 ? spare / (n - 1) : 0;
+    if (perRow) *perRow = n;
+    if (gap) *gap = MIN(MAX(spread, g), 14.0);
+}
+
+static UIColor *ACGTabStripColor(NSInteger strip) { return strip == 0 ? UIColor.systemTealColor : UIColor.systemPinkColor; }
+
+@interface ACGTabBoard : UIView <UIColorPickerViewControllerDelegate>
+@property (nonatomic, strong) NSMutableArray<NSMutableArray<NSString *> *> *lists;   // 0 đang hiện (có thứ tự), 1 đang ẩn
+@property (nonatomic, copy) NSString *selectedIdent;
+@property (nonatomic, strong) NSMutableDictionary<NSString *, AutoACOverlayChip *> *chips;   // khoá "dải|mã"
+@property (nonatomic, strong) NSArray<UIView *> *strips;
+@property (nonatomic, strong) NSArray<UILabel *> *hints;
+@property (nonatomic, strong) NSArray<NSArray *> *headerParts;
+@property (nonatomic, strong) UIView *detail, *detailDisc, *renameButton, *pill;
+@property (nonatomic, strong) UIImageView *detailIcon;
+@property (nonatomic, strong) UILabel *detailTitle, *detailCaption, *footer, *settingsTitle;
+@property (nonatomic, strong) UIView *settingsCard;
+@property (nonatomic, strong) NSMutableArray<UIView *> *settingRows;
+@property (nonatomic, weak) UIScrollView *scroll;
+@property (nonatomic, weak) NSLayoutConstraint *heightConstraint;
+@property (nonatomic, strong) AutoACOverlayChip *dragChip;
+@property (nonatomic, assign) NSInteger holeStrip, holeIndex;
+@property (nonatomic, assign) CGPoint grab;
+@property (nonatomic, strong) NSArray<NSNumber *> *frozenSlots;   // trong lúc kéo: số ô mỗi dải được giữ nguyên để dải không nhảy
+- (void)restoreYouTubeDefaults;
+@end
+
+@implementation ACGTabBoard
+
+static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString stringWithFormat:@"%ld|%@", (long)strip, ident]; }
+
+- (instancetype)initWithFrame:(CGRect)frame {
+    if ((self = [super initWithFrame:frame])) {
+        _chips = [NSMutableDictionary dictionary];
+        _settingRows = [NSMutableArray array];
+        [self loadLists];
+        NSMutableArray<UIView *> *strips = [NSMutableArray array];
+        NSMutableArray<UILabel *> *hints = [NSMutableArray array];
+        NSMutableArray<NSArray *> *parts = [NSMutableArray array];
+        NSArray<NSString *> *symbols = @[@"rectangle.bottomthird.inset.filled", @"eye.slash"];
+        NSArray<NSString *> *names = @[AutoACT(@"TAB ĐANG HIỆN"), AutoACT(@"TAB ĐANG ẨN")];
+        NSArray<NSString *> *captions = @[AutoACT(@"Trên thanh tab, từ trái sang phải"), AutoACT(@"Không hiện trên thanh tab")];
+        for (NSInteger s = 0; s < 2; s++) {
+            UIColor *tint = ACGTabStripColor(s);
+            UIView *strip = [[UIView alloc] init];
+            strip.backgroundColor = [tint colorWithAlphaComponent:0.10];
+            strip.layer.cornerRadius = 20;
+            strip.layer.cornerCurve = kCACornerCurveContinuous;
+            strip.layer.borderWidth = 1.0;
+            strip.layer.borderColor = [tint colorWithAlphaComponent:0.35].CGColor;
+            [self addSubview:strip];
+            [strips addObject:strip];
+            UILabel *hint = [[UILabel alloc] init];
+            hint.text = AutoACT(@"Kéo tab vào đây");
+            hint.font = [UIFont systemFontOfSize:12];
+            hint.textColor = UIColor.tertiaryLabelColor;
+            hint.textAlignment = NSTextAlignmentCenter;
+            [strip addSubview:hint];
+            [hints addObject:hint];
+            UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:14 weight:UIImageSymbolWeightSemibold];
+            UIImageView *icon = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:symbols[(NSUInteger)s] withConfiguration:cfg]];
+            icon.tintColor = tint;
+            icon.contentMode = UIViewContentModeCenter;
+            UILabel *title = [[UILabel alloc] init];
+            title.text = names[(NSUInteger)s];
+            title.font = [UIFont systemFontOfSize:13 weight:UIFontWeightBold];
+            title.textColor = tint;
+            UILabel *caption = [[UILabel alloc] init];
+            caption.text = captions[(NSUInteger)s];
+            caption.font = [UIFont systemFontOfSize:11];
+            caption.textColor = UIColor.secondaryLabelColor;
+            caption.textAlignment = NSTextAlignmentRight;
+            caption.adjustsFontSizeToFitWidth = YES;
+            caption.minimumScaleFactor = 0.75;
+            [self addSubview:icon];
+            [self addSubview:title];
+            [self addSubview:caption];
+            [parts addObject:@[icon, title, caption]];
+        }
+        _strips = strips;
+        _hints = hints;
+        _headerParts = parts;
+
+        _detail = [[UIView alloc] init];
+        _detail.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:0.07];
+        _detail.layer.cornerRadius = 20;
+        _detail.layer.cornerCurve = kCACornerCurveContinuous;
+        _detail.layer.borderWidth = 1.0;
+        _detail.layer.borderColor = [UIColor.labelColor colorWithAlphaComponent:0.12].CGColor;
+        [self addSubview:_detail];
+        _detailDisc = [[UIView alloc] initWithFrame:CGRectMake(14, 15, 36, 36)];
+        _detailDisc.layer.cornerRadius = 18;
+        _detailDisc.backgroundColor = [UIColor.systemBlueColor colorWithAlphaComponent:0.30];
+        [_detail addSubview:_detailDisc];
+        _detailIcon = [[UIImageView alloc] initWithFrame:_detailDisc.bounds];
+        _detailIcon.tintColor = UIColor.whiteColor;
+        _detailIcon.contentMode = UIViewContentModeCenter;
+        [_detailDisc addSubview:_detailIcon];
+        _detailTitle = [[UILabel alloc] init];
+        _detailTitle.font = [UIFont systemFontOfSize:16 weight:UIFontWeightSemibold];
+        _detailTitle.textColor = UIColor.labelColor;
+        _detailTitle.adjustsFontSizeToFitWidth = YES;
+        _detailTitle.minimumScaleFactor = 0.8;
+        [_detail addSubview:_detailTitle];
+        _detailCaption = [[UILabel alloc] init];
+        _detailCaption.font = [UIFont systemFontOfSize:11.5];
+        _detailCaption.textColor = UIColor.secondaryLabelColor;
+        [_detail addSubview:_detailCaption];
+        // nút kính đổi tên tab đang chọn
+        UIVisualEffectView *rename = AutoACMakeGlass(14);
+        rename.layer.cornerRadius = 14;
+        rename.layer.cornerCurve = kCACornerCurveContinuous;
+        rename.clipsToBounds = YES;
+        UIButton *renameTap = [UIButton buttonWithType:UIButtonTypeCustom];
+        renameTap.frame = CGRectMake(0, 0, 80, 28);
+        renameTap.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        [renameTap setTitle:[AutoACT(@"Đổi tên tab") stringByAppendingString:@"…"] forState:UIControlStateNormal];
+        [renameTap setTitleColor:UIColor.systemBlueColor forState:UIControlStateNormal];
+        renameTap.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
+        renameTap.titleLabel.adjustsFontSizeToFitWidth = YES;
+        renameTap.titleLabel.minimumScaleFactor = 0.8;
+        [renameTap addTarget:self action:@selector(renameTapped) forControlEvents:UIControlEventTouchUpInside];
+        [rename.contentView addSubview:renameTap];
+        _renameButton = rename;
+        [_detail addSubview:rename];
+
+        _settingsTitle = [[UILabel alloc] init];
+        _settingsTitle.text = AutoACT(@"CHUNG");
+        _settingsTitle.font = [UIFont systemFontOfSize:13 weight:UIFontWeightBold];
+        _settingsTitle.textColor = UIColor.systemIndigoColor;
+        [self addSubview:_settingsTitle];
+        _settingsCard = [[UIView alloc] init];
+        _settingsCard.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:0.06];
+        _settingsCard.layer.cornerRadius = 20;
+        _settingsCard.layer.cornerCurve = kCACornerCurveContinuous;
+        [self addSubview:_settingsCard];
+
+        _footer = [[UILabel alloc] init];
+        _footer.numberOfLines = 0;
+        _footer.font = [UIFont systemFontOfSize:11];
+        _footer.textColor = UIColor.secondaryLabelColor;
+        _footer.text = AutoACT(@"Nhấn giữ một tab rồi kéo để đổi thứ tự hoặc chuyển giữa hai dải. Chạm một tab để chọn, rồi ẩn/hiện hoặc đổi tên ở thẻ bên dưới. Thay đổi tab có hiệu lực sau khi mở lại app.");
+        [self addSubview:_footer];
+
+        [self selectDefault];
+        [self buildSettings];
+        [self rebuildAnimated:NO];
+    }
+    return self;
+}
+
+#pragma mark Dữ liệu
+
+- (void)loadLists {
+    NSMutableArray<NSString *> *active = [NSMutableArray array], *hidden = [NSMutableArray array];
+    NSArray<NSString *> *extras = ACGExtraTabTokens();
+    for (NSDictionary *tab in ACGTabCatalog()) {
+        id stored = ACGPreferenceObject(tab[@"key"]);
+        BOOL isHidden = [stored respondsToSelector:@selector(boolValue)] ? [stored boolValue] : [extras containsObject:tab[@"id"]];
+        ACGSetPreference(tab[@"key"], isHidden);
+        [(isHidden ? hidden : active) addObject:tab[@"id"]];
+    }
+    NSArray *order = [kPrefs arrayForKey:@"ACG.Preference.Tabs.Order"];
+    if (order.count != 0) {
+        [active sortUsingComparator:^NSComparisonResult(NSString *left, NSString *right) {
+            NSUInteger l = [order indexOfObject:left], r = [order indexOfObject:right];
+            l = l == NSNotFound ? NSUIntegerMax : l;
+            r = r == NSNotFound ? NSUIntegerMax : r;
+            return l < r ? NSOrderedAscending : (l > r ? NSOrderedDescending : NSOrderedSame);
+        }];
+    }
+    self.lists = [NSMutableArray arrayWithObjects:active, hidden, nil];
+}
+
+- (void)selectDefault {
+    if (self.selectedIdent && ACGTabEntry(self.selectedIdent)) return;
+    for (NSMutableArray<NSString *> *list in self.lists) if (list.count) { self.selectedIdent = list.firstObject; return; }
+    self.selectedIdent = @"home";
+}
+
+- (void)persist {
+    for (NSString *token in self.lists[0]) ACGSetPreference(ACGTabEntry(token)[@"key"], NO);
+    for (NSString *token in self.lists[1]) ACGSetPreference(ACGTabEntry(token)[@"key"], YES);
+    [kPrefs setObject:[self.lists[0] copy] forKey:@"ACG.Preference.Tabs.Order"];
+    [NSNotificationCenter.defaultCenter postNotificationName:ACGTabConfigChangedNote object:nil];
+    ACGRefreshPivotBarBackground();
+    AutoACRestartHint();
+    [self buildSettings];   // danh sách "Tab khi mở app" phụ thuộc tab đang ẩn
+    [self setNeedsLayout];
+}
+
+// Đưa tập tab, thứ tự, tên riêng và tab khi mở app về như YouTube gốc (kiểu thanh tab, nhãn, màu giữ nguyên)
+- (void)restoreYouTubeDefaults {
+    NSArray<NSString *> *extras = ACGExtraTabTokens();
+    for (NSDictionary *tab in ACGTabCatalog()) ACGSetPreference(tab[@"key"], [extras containsObject:tab[@"id"]]);
+    [kPrefs removeObjectForKey:@"ACG.Preference.Tabs.Order"];
+    [kPrefs removeObjectForKey:@"ACG.Preference.Tabs.Names"];
+    [kPrefs removeObjectForKey:@"ACG.Preference.Tabs.Startup"];
+    [self loadLists];
+    [self selectDefault];
+    [self reloadChipsAnimated:YES];
+    [self buildSettings];
+    [NSNotificationCenter.defaultCenter postNotificationName:ACGTabConfigChangedNote object:nil];
+    ACGRefreshPivotBarBackground();
+    ACGRefreshPivotLabels();
+    AutoACRestartHint();
+}
+
+#pragma mark Cài đặt chung
+
+- (UIView *)settingRowWithTitle:(NSString *)title detail:(NSString *)detail accessory:(UIView *)accessory tap:(SEL)tap {
+    UIView *row = [[UIView alloc] init];
+    UILabel *t = [[UILabel alloc] init];
+    t.text = title;
+    t.font = [UIFont systemFontOfSize:16 weight:UIFontWeightMedium];
+    t.textColor = UIColor.labelColor;
+    t.adjustsFontSizeToFitWidth = YES;
+    t.minimumScaleFactor = 0.8;
+    t.tag = 101;
+    UILabel *d = [[UILabel alloc] init];
+    d.text = detail;
+    d.font = [UIFont systemFontOfSize:12];
+    d.textColor = UIColor.secondaryLabelColor;
+    d.tag = 102;
+    [row addSubview:t];
+    [row addSubview:d];
+    if (accessory) { accessory.tag = 103; [row addSubview:accessory]; }
+    if (tap) [row addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:tap]];
+    return row;
+}
+
+- (UISwitch *)switchForKey:(NSString *)key on:(BOOL)on {
+    UISwitch *toggle = [UISwitch new];
+    toggle.transform = CGAffineTransformMakeScale(0.95, 0.95);
+    toggle.onTintColor = UIColor.systemGreenColor;
+    toggle.on = on;
+    objc_setAssociatedObject(toggle, ACGTabSwitchKey, key, OBJC_ASSOCIATION_COPY_NONATOMIC);
+    [toggle addTarget:self action:@selector(switchChanged:) forControlEvents:UIControlEventValueChanged];
+    return toggle;
+}
+
+- (void)switchChanged:(UISwitch *)sender {
+    NSString *key = objc_getAssociatedObject(sender, ACGTabSwitchKey);
+    BOOL isLabelsKey = [key isEqualToString:@"ACG.Preference.Tabs.LabelsHidden"];
+    ACGSetPreference(key, isLabelsKey ? !sender.isOn : sender.isOn);   // khoá nhãn lưu trạng thái ẨN nên công tắc đảo ngược
+    [kPrefs synchronize];
+    ACGRefreshPivotBarBackground();
+    if (isLabelsKey) ACGRefreshPivotLabels();
+}
+
+- (void)buildSettings {
+    for (UIView *row in self.settingRows) [row removeFromSuperview];
+    [self.settingRows removeAllObjects];
+    __weak ACGTabBoard *weakSelf = self;
+    BOOL liquid = ACGLiquidGlassAvailable();
+
+    NSArray<NSString *> *startTitles = nil, *startValues = nil;
+    ACGStartupDestinations(&startTitles, &startValues);
+    NSUInteger startIndex = [startValues indexOfObject:ACGPreferenceObject(@"ACG.Preference.Tabs.Startup") ?: @""];
+    NSUInteger startCur = (startIndex != NSNotFound && startIndex < startTitles.count) ? startIndex : 0;
+    UIView *startPill = ACGValueMenu(startTitles[startCur], startTitles, startCur, ^(NSUInteger pick) {
+        ACGSetPreferenceObject(@"ACG.Preference.Tabs.Startup", startValues[pick]);
+        [weakSelf buildSettings];
+        AutoACRestartHint();
+    });
+    [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Tab khi mở app") detail:AutoACT(@"Tab hiện khi mở app") accessory:startPill tap:nil]];
+
+    [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Bật nhãn") detail:AutoACT(@"Hiện tên dưới icon")
+        accessory:[self switchForKey:@"ACG.Preference.Tabs.LabelsHidden" on:![ACGPreferenceObject(@"ACG.Preference.Tabs.LabelsHidden") boolValue]] tap:nil]];
+
+    if (liquid) {
+        [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Bật thu gọn") detail:AutoACT(@"Thu nhỏ khi cuộn")
+            accessory:[self switchForKey:@"ACG.Preference.Tabs.GlassMinimize" on:[ACGPreferenceObject(@"ACG.Preference.Tabs.GlassMinimize") boolValue]] tap:nil]];
+    }
+
+    NSArray<NSString *> *tintTitles = @[AutoACT(@"Tắt"), AutoACT(@"Chỉ chữ"), @"Icon-text"];
+    UIView *tintPill = ACGValueMenu(tintTitles[ACGTintIndex()], tintTitles, ACGTintIndex(), ^(NSUInteger pick) {
+        ACGSetPreferenceObject(@"ACG.Preference.Tabs.SelectedTint", @(pick));
+        [weakSelf buildSettings];
+        ACGRefreshPivotBarBackground();
+    });
+    [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Kiểu màu tab") detail:AutoACT(@"Màu chữ, icon tab chọn") accessory:tintPill tap:nil]];
+
+    UIView *dot = [[UIView alloc] initWithFrame:CGRectMake(0, 0, 28, 28)];
+    dot.backgroundColor = ACGTintSwatchColor();
+    dot.layer.cornerRadius = 14.0;
+    dot.layer.borderWidth = 2.0;
+    dot.layer.borderColor = UIColor.secondaryLabelColor.CGColor;
+    [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Kiểu màu") detail:AutoACT(@"Màu tab đang chọn") accessory:dot tap:@selector(pickTintColor)]];
+
+    if (liquid) {
+        UIView *glassPill = ACGValueMenu(ACGTabBarGlassMode() == 1 ? @"Glass" : AutoACT(@"Mặc định"), @[AutoACT(@"Mặc định"), @"Glass"],
+                                         ACGTabBarGlassMode() == 1 ? 1 : 0, ^(NSUInteger pick) {
+            ACGSetPreferenceObject(@"ACG.Preference.Tabs.GlassMode", @(pick));
+            [weakSelf buildSettings];
+            ACGRefreshPivotBarBackground();
+            AutoACRestartHint();
+        });
+        [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Kiểu thanh tab") detail:AutoACT(@"Mặc định hoặc Glass") accessory:glassPill tap:nil]];
+    }
+    for (UIView *row in self.settingRows) [self.settingsCard addSubview:row];
+    [self setNeedsLayout];
+}
+
+- (void)pickTintColor {
+    UIColorPickerViewController *picker = [UIColorPickerViewController new];
+    picker.title = AutoACT(@"Kiểu màu");
+    picker.supportsAlpha = NO;
+    picker.selectedColor = ACGTintSwatchColor();
+    picker.delegate = self;
+    [AutoACTopViewController() presentViewController:picker animated:YES completion:nil];
+}
+
+- (void)saveTintColor:(UIColor *)color {
+    if (!color) return;
+    ACGSetPreferenceObject(@"ACG.Preference.Tabs.SelectedTintColor", ACGTintHexFromColor(color));
+    [self buildSettings];
+    ACGRefreshPivotBarBackground();
+}
+- (void)colorPickerViewController:(UIColorPickerViewController *)viewController didSelectColor:(UIColor *)color continuously:(BOOL)continuously {
+    if (!continuously) [self saveTintColor:color];
+}
+- (void)colorPickerViewControllerDidFinish:(UIColorPickerViewController *)viewController { [self saveTintColor:viewController.selectedColor]; }
+
+#pragma mark Bố cục
+
+- (NSInteger)slotsInStrip:(NSInteger)s {
+    if (self.frozenSlots) return self.frozenSlots[(NSUInteger)s].integerValue;
+    return (NSInteger)self.lists[(NSUInteger)s].count;
+}
+
+- (CGFloat)stripHeight:(NSInteger)s perRow:(NSInteger)perRow {
+    NSInteger rows = MAX(1, ((NSInteger)[self slotsInStrip:s] + perRow - 1) / perRow);
+    return rows * kTabRowPitch + 8.0;
+}
+
+static const CGFloat kTabSettingRow = 56.0;
+
+- (CGFloat)layoutFrames:(BOOL)apply {
+    CGFloat width = CGRectGetWidth(self.bounds) > 0 ? CGRectGetWidth(self.bounds) : 320.0, y = 4;
+    NSInteger perRow = 4;
+    ACGTabMetrics(width, &perRow, NULL);
+    for (NSInteger s = 0; s < 2; s++) {
+        CGFloat h = [self stripHeight:s perRow:perRow];
+        if (apply) {
+            NSArray *parts = self.headerParts[(NSUInteger)s];
+            ((UIView *)parts[0]).frame = CGRectMake(0, y + 4, 20, 20);
+            ((UIView *)parts[1]).frame = CGRectMake(26, y, 120, 28);
+            ((UIView *)parts[2]).frame = CGRectMake(width - 170, y, 170, 28);
+            UIView *strip = self.strips[(NSUInteger)s];
+            strip.frame = CGRectMake(0, y + 30, width, h);
+            self.hints[(NSUInteger)s].frame = CGRectMake(0, 0, width, kTabRowPitch);
+        }
+        y += 30 + h + 12;
+    }
+    CGFloat detailHeight = 108;
+    if (apply) {
+        self.detail.frame = CGRectMake(0, y, width, detailHeight);
+        CGFloat pillWidth = 104;
+        self.detailTitle.frame = CGRectMake(62, 12, MAX(width - 62 - pillWidth - 24, 40), 22);
+        self.detailCaption.frame = CGRectMake(62, 35, MAX(width - 62 - pillWidth - 24, 40), 16);
+        self.pill.frame = CGRectMake(width - 14 - pillWidth, 17, pillWidth, 32);
+        self.renameButton.frame = CGRectMake(14, 66, MIN(width - 28, 190), 30);
+    }
+    y += detailHeight + 16;
+    if (apply) {
+        self.settingsTitle.frame = CGRectMake(2, y, 200, 24);
+        self.settingsCard.frame = CGRectMake(0, y + 28, width, self.settingRows.count * kTabSettingRow);
+        for (NSUInteger i = 0; i < self.settingRows.count; i++) {
+            UIView *row = self.settingRows[i];
+            row.frame = CGRectMake(0, i * kTabSettingRow, width, kTabSettingRow);
+            UIView *accessory = [row viewWithTag:103];
+            CGFloat aw = 0;
+            if (accessory) {
+                BOOL isSwitch = [accessory isKindOfClass:UISwitch.class];
+                CGSize size = isSwitch ? CGSizeMake(51, 31) : (CGRectGetWidth(accessory.bounds) == 28 ? CGSizeMake(28, 28) : CGSizeMake(112, 28));
+                accessory.bounds = CGRectMake(0, 0, size.width, size.height);
+                accessory.center = CGPointMake(width - 14 - size.width / 2, kTabSettingRow / 2);
+                aw = size.width;
+            }
+            CGFloat tw = MAX(width - 16 - aw - 28, 60);
+            [row viewWithTag:101].frame = CGRectMake(16, 9, tw, 20);
+            [row viewWithTag:102].frame = CGRectMake(16, 31, tw, 16);
+            if (i > 0) {
+                UIView *line = [row viewWithTag:104];
+                if (!line) {
+                    line = [[UIView alloc] init];
+                    line.tag = 104;
+                    line.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:0.10];
+                    [row addSubview:line];
+                }
+                line.frame = CGRectMake(16, 0, width - 32, 0.5);
+            }
+        }
+    }
+    y += 28 + self.settingRows.count * kTabSettingRow + 12;
+    if (apply) {
+        CGSize fit = [self.footer sizeThatFits:CGSizeMake(MAX(width - 4, 10), CGFLOAT_MAX)];
+        self.footer.frame = CGRectMake(2, y, MAX(width - 4, 10), ceil(fit.height));
+    }
+    CGSize fit = [self.footer sizeThatFits:CGSizeMake(MAX(width - 4, 10), CGFLOAT_MAX)];
+    return y + ceil(fit.height) + 8;
+}
+
+- (void)layoutSubviews {
+    [super layoutSubviews];
+    CGFloat total = [self layoutFrames:YES];
+    [self layoutChipsAnimated:NO];
+    NSLayoutConstraint *c = self.heightConstraint;
+    if (c && fabs(c.constant - total) > 0.5) {
+        c.constant = total;
+        dispatch_async(dispatch_get_main_queue(), ^{ [self.superview setNeedsLayout]; });
+    }
+}
+
+- (CGPoint)slotOrigin:(NSInteger)slot strip:(NSInteger)s perRow:(NSInteger)perRow gap:(CGFloat)gap {
+    CGFloat top = CGRectGetMinY(self.strips[(NSUInteger)s].frame) + 4.0;
+    NSInteger row = slot / perRow, col = slot % perRow;
+    return CGPointMake(12 + col * (kTabChipW + gap), top + row * kTabRowPitch);
+}
+
+- (void)placeChip:(AutoACOverlayChip *)chip frame:(CGRect)frame animated:(BOOL)animated {
+    if (chip.tag == 0) { chip.frame = frame; chip.tag = 1; return; }
+    if (CGRectEqualToRect(chip.frame, frame)) return;
+    if (!animated) { chip.frame = frame; return; }
+    [UIView animateWithDuration:0.26 delay:0 usingSpringWithDamping:0.82 initialSpringVelocity:0
+                        options:UIViewAnimationOptionBeginFromCurrentState | UIViewAnimationOptionAllowUserInteraction
+                     animations:^{ chip.frame = frame; } completion:nil];
+}
+
+- (void)layoutChipsAnimated:(BOOL)animated {
+    CGFloat width = CGRectGetWidth(self.bounds);
+    if (width <= 0) return;
+    NSInteger perRow = 4;
+    CGFloat gap = 6;
+    ACGTabMetrics(width, &perRow, &gap);
+    NSString *dragKey = self.dragChip ? ACGTabKey([self boardStripOf:self.dragChip], self.dragChip.ident) : nil;
+    for (NSInteger s = 0; s < 2; s++) {
+        NSMutableArray<AutoACOverlayChip *> *items = [NSMutableArray array];
+        for (NSString *ident in self.lists[(NSUInteger)s]) {
+            NSString *key = ACGTabKey(s, ident);
+            if ([key isEqualToString:dragKey]) continue;
+            AutoACOverlayChip *chip = self.chips[key];
+            if (chip) [items addObject:chip];
+        }
+        BOOL hasHole = self.dragChip != nil && self.holeStrip == s;
+        self.hints[(NSUInteger)s].hidden = (items.count + (hasHole ? 1 : 0)) > 0;
+        NSInteger slot = 0;
+        for (NSInteger i = 0; i <= (NSInteger)items.count; i++) {
+            if (hasHole && i == self.holeIndex) slot++;
+            if (i == (NSInteger)items.count) break;
+            CGPoint o = [self slotOrigin:slot strip:s perRow:perRow gap:gap];
+            slot++;
+            [self placeChip:items[(NSUInteger)i] frame:CGRectMake(o.x, o.y, kTabChipW, 68) animated:animated];
+        }
+    }
+}
+
+- (NSInteger)boardStripOf:(AutoACOverlayChip *)chip { return chip.strip == 0 ? 0 : 1; }   // nút dải hiện dùng màu dải 0, dải ẩn dùng màu dải 2
+
+#pragma mark Dựng nút
+
+- (void)reloadChipsAnimated:(BOOL)animated {
+    for (AutoACOverlayChip *chip in self.chips.allValues) [chip removeFromSuperview];
+    [self.chips removeAllObjects];
+    [self rebuildAnimated:animated];
+}
+
+- (void)rebuildAnimated:(BOOL)animated {
+    NSMutableSet<NSString *> *wanted = [NSMutableSet set];
+    for (NSInteger s = 0; s < 2; s++) {
+        for (NSString *ident in self.lists[(NSUInteger)s]) {
+            NSString *key = ACGTabKey(s, ident);
+            [wanted addObject:key];
+            if (self.chips[key]) continue;
+            NSDictionary *entry = ACGTabEntry(ident);
+            if (!entry) continue;
+            NSMutableDictionary *shown = [entry mutableCopy];
+            shown[@"title"] = ACGTabDisplayName(entry);
+            AutoACOverlayChip *chip = [[AutoACOverlayChip alloc] initWithEntry:shown strip:s == 0 ? 0 : 2];
+            UILongPressGestureRecognizer *press = [[UILongPressGestureRecognizer alloc] initWithTarget:self action:@selector(handlePress:)];
+            press.minimumPressDuration = 0.2;
+            [chip addGestureRecognizer:press];
+            [chip addGestureRecognizer:[[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(handleTap:)]];
+            [self addSubview:chip];
+            self.chips[key] = chip;
+            if (animated) { chip.alpha = 0; [UIView animateWithDuration:0.2 animations:^{ chip.alpha = 1; }]; }
+        }
+    }
+    for (NSString *key in self.chips.allKeys) {
+        AutoACOverlayChip *chip = self.chips[key];
+        if ([wanted containsObject:key] || chip == self.dragChip) continue;
+        [self.chips removeObjectForKey:key];
+        [UIView animateWithDuration:animated ? 0.18 : 0 animations:^{ chip.alpha = 0; } completion:^(BOOL finished) { [chip removeFromSuperview]; }];
+    }
+    [self setNeedsLayout];
+    [self layoutIfNeeded];
+    [self layoutChipsAnimated:animated];
+    [self refreshPicked];
+    [self refreshDetail];
+}
+
+- (void)refreshPicked {
+    for (AutoACOverlayChip *chip in self.chips.allValues) chip.picked = [chip.ident isEqualToString:self.selectedIdent];
+}
+
+- (void)refreshDetail {
+    NSDictionary *entry = ACGTabEntry(self.selectedIdent);
+    self.detailTitle.text = entry ? ACGTabDisplayName(entry) : @"";
+    BOOL shown = [self.lists[0] containsObject:self.selectedIdent];
+    self.detailCaption.text = shown ? AutoACT(@"Đang hiện trên thanh tab") : AutoACT(@"Đang ẩn");
+    UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIImageSymbolWeightMedium];
+    self.detailIcon.image = entry ? [UIImage systemImageNamed:entry[@"symbol"] withConfiguration:cfg] : nil;
+    self.detailDisc.backgroundColor = [ACGTabStripColor(shown ? 0 : 1) colorWithAlphaComponent:0.34];
+    NSArray<NSString *> *titles = @[AutoACT(@"Hiện"), AutoACT(@"Ẩn")];
+    NSUInteger position = shown ? 0 : 1;
+    [self.pill removeFromSuperview];
+    __weak ACGTabBoard *weakSelf = self;
+    UIView *pill = ACGValueMenu([titles[position] stringByAppendingString:@" ▾"], titles, position, ^(NSUInteger index) { [weakSelf applyVisibility:index == 0]; });
+    [self.detail addSubview:pill];
+    self.pill = pill;
+    [self setNeedsLayout];
+}
+
+#pragma mark Thao tác
+
+- (void)select:(NSString *)ident {
+    if (!ident || [ident isEqualToString:self.selectedIdent]) return;
+    self.selectedIdent = ident;
+    [self refreshPicked];
+    [self refreshDetail];
+}
+
+- (void)handleTap:(UITapGestureRecognizer *)g {
+    [[UISelectionFeedbackGenerator new] selectionChanged];
+    [self select:((AutoACOverlayChip *)g.view).ident];
+}
+
+// Hiện / Ẩn tab đang chọn bằng nút kính (tab chuyển xuống cuối dải kia)
+- (void)applyVisibility:(BOOL)show {
+    NSString *ident = self.selectedIdent;
+    if (!ident) return;
+    NSInteger from = show ? 1 : 0, to = show ? 0 : 1;
+    if (![self.lists[(NSUInteger)from] containsObject:ident]) return;
+    [self.lists[(NSUInteger)from] removeObject:ident];
+    [self.lists[(NSUInteger)to] addObject:ident];
+    [self persist];
+    [self reloadChipsAnimated:YES];
+}
+
+- (void)renameTapped {
+    NSDictionary *entry = ACGTabEntry(self.selectedIdent);
+    if (!entry) return;
+    NSString *token = entry[@"id"];
+    NSDictionary *names = [kPrefs dictionaryForKey:@"ACG.Preference.Tabs.Names"];
+    UIAlertController *alert = [UIAlertController alertControllerWithTitle:AutoACT(@"Đổi tên tab")
+        message:AutoACT(@"Để trống để dùng lại tên mặc định.") preferredStyle:UIAlertControllerStyleAlert];
+    [alert addTextFieldWithConfigurationHandler:^(UITextField *field) {
+        field.placeholder = entry[@"title"];
+        field.text = names[token];
+        field.clearButtonMode = UITextFieldViewModeWhileEditing;
+    }];
+    [alert addAction:[UIAlertAction actionWithTitle:AutoACT(@"Huỷ") style:UIAlertActionStyleCancel handler:nil]];
+    __weak ACGTabBoard *weakSelf = self;
+    [alert addAction:[UIAlertAction actionWithTitle:AutoACT(@"Lưu") style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+        NSMutableDictionary *updated = [names mutableCopy] ?: [NSMutableDictionary dictionary];
+        NSString *value = [alert.textFields.firstObject.text stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];
+        if (value.length == 0) [updated removeObjectForKey:token]; else updated[token] = value;
+        [kPrefs setObject:updated forKey:@"ACG.Preference.Tabs.Names"];
+        [NSNotificationCenter.defaultCenter postNotificationName:ACGTabConfigChangedNote object:nil];
+        [weakSelf reloadChipsAnimated:NO];
+        AutoACRestartHint();
+    }]];
+    [AutoACTopViewController() presentViewController:alert animated:YES completion:nil];
+}
+
+- (NSInteger)stripAtY:(CGFloat)y {
+    NSInteger best = 0;
+    CGFloat bestDistance = CGFLOAT_MAX;
+    for (NSInteger s = 0; s < 2; s++) {
+        CGRect frame = self.strips[(NSUInteger)s].frame;
+        CGFloat distance = y < CGRectGetMinY(frame) ? CGRectGetMinY(frame) - y : (y > CGRectGetMaxY(frame) ? y - CGRectGetMaxY(frame) : 0);
+        if (distance < bestDistance) { bestDistance = distance; best = s; }
+    }
+    return best;
+}
+
+// Vị trí chèn gần điểm chạm nhất, tính trên bố cục KHÔNG có chỗ trống (chỗ trống không làm các nút nhảy qua lại)
+- (NSInteger)slotAtPoint:(CGPoint)p inStrip:(NSInteger)strip {
+    NSString *dragKey = ACGTabKey([self boardStripOf:self.dragChip], self.dragChip.ident);
+    NSInteger count = 0;
+    for (NSString *ident in self.lists[(NSUInteger)strip]) if (![ACGTabKey(strip, ident) isEqualToString:dragKey]) count++;
+    NSInteger perRow = 4;
+    CGFloat gap = 6;
+    ACGTabMetrics(CGRectGetWidth(self.bounds), &perRow, &gap);
+    NSInteger best = 0;
+    CGFloat bestDistance = CGFLOAT_MAX;
+    for (NSInteger i = 0; i <= count; i++) {
+        CGPoint o = [self slotOrigin:i strip:strip perRow:perRow gap:gap];
+        CGFloat dx = p.x - (o.x + kTabChipW / 2), dy = p.y - (o.y + 34);
+        CGFloat d = dx * dx + dy * dy;
+        if (d < bestDistance) { bestDistance = d; best = i; }
+    }
+    return best;
+}
+
+- (void)highlightStrip:(NSInteger)target {
+    [UIView animateWithDuration:0.15 animations:^{
+        for (NSInteger s = 0; s < 2; s++) {
+            UIColor *tint = ACGTabStripColor(s);
+            BOOL on = s == target;
+            self.strips[(NSUInteger)s].backgroundColor = [tint colorWithAlphaComponent:on ? 0.24 : 0.10];
+            self.strips[(NSUInteger)s].layer.borderColor = [tint colorWithAlphaComponent:on ? 0.95 : 0.35].CGColor;
+        }
+    }];
+}
+
+- (void)handlePress:(UILongPressGestureRecognizer *)g {
+    AutoACOverlayChip *chip = (AutoACOverlayChip *)g.view;
+    CGPoint p = [g locationInView:self];
+    switch (g.state) {
+        case UIGestureRecognizerStateBegan: {
+            if (self.dragChip) return;
+            [[UIImpactFeedbackGenerator new] impactOccurred];
+            [self select:chip.ident];
+            NSInteger origin = [self boardStripOf:chip];
+            // giữ nguyên số ô mỗi dải trong lúc kéo: dải gốc đang có đủ chỗ, dải kia chừa thêm một ô cho nút được thả vào
+            NSMutableArray<NSNumber *> *frozen = [NSMutableArray array];
+            for (NSInteger s = 0; s < 2; s++) [frozen addObject:@((NSInteger)self.lists[(NSUInteger)s].count + (s == origin ? 0 : 1))];
+            self.frozenSlots = frozen;
+            self.dragChip = chip;
+            self.grab = CGPointMake(p.x - chip.center.x, p.y - chip.center.y);
+            self.holeStrip = origin;
+            NSUInteger at = [self.lists[(NSUInteger)origin] indexOfObject:chip.ident];
+            self.holeIndex = at == NSNotFound ? 0 : (NSInteger)at;
+            self.scroll.scrollEnabled = NO;
+            [self bringSubviewToFront:chip];
+            chip.layer.shadowColor = UIColor.blackColor.CGColor;
+            chip.layer.shadowOpacity = 0.35;
+            chip.layer.shadowRadius = 8;
+            chip.layer.shadowOffset = CGSizeMake(0, 4);
+            [UIView animateWithDuration:0.18 animations:^{ chip.transform = CGAffineTransformMakeScale(1.14, 1.14); }];
+            [self highlightStrip:self.holeStrip];
+            [self setNeedsLayout];
+            [self layoutIfNeeded];
+            [self layoutChipsAnimated:YES];
+            break;
+        }
+        case UIGestureRecognizerStateChanged: {
+            if (chip != self.dragChip) return;
+            chip.center = CGPointMake(p.x - self.grab.x, p.y - self.grab.y);
+            NSInteger strip = [self stripAtY:p.y];
+            NSInteger slot = [self slotAtPoint:p inStrip:strip];
+            if (strip != self.holeStrip || slot != self.holeIndex) {
+                self.holeStrip = strip;
+                self.holeIndex = slot;
+                [self highlightStrip:strip];
+                [self layoutChipsAnimated:YES];
+            }
+            break;
+        }
+        case UIGestureRecognizerStateEnded:
+            [self finishDrag:YES];
+            break;
+        case UIGestureRecognizerStateCancelled:
+        case UIGestureRecognizerStateFailed:
+            [self finishDrag:NO];
+            break;
+        default:
+            break;
+    }
+}
+
+- (void)finishDrag:(BOOL)commit {
+    AutoACOverlayChip *chip = self.dragChip;
+    if (!chip) return;
+    NSInteger from = [self boardStripOf:chip];
+    NSString *ident = chip.ident;
+    self.scroll.scrollEnabled = YES;
+    [self highlightStrip:-1];
+    CGPoint center = chip.center;
+    chip.transform = CGAffineTransformIdentity;
+    chip.center = center;
+    chip.layer.shadowOpacity = 0;
+    self.dragChip = nil;
+    self.frozenSlots = nil;
+    if (commit) {
+        NSInteger to = self.holeStrip, index = self.holeIndex;
+        [self.lists[(NSUInteger)from] removeObject:ident];
+        NSMutableArray<NSString *> *dest = self.lists[(NSUInteger)to];
+        [dest insertObject:ident atIndex:MIN((NSUInteger)MAX(index, 0), dest.count)];
+        [self persist];
+        [[UIImpactFeedbackGenerator new] impactOccurred];
+        [self reloadChipsAnimated:NO];   // đổi dải thì đổi màu nút: dựng lại cho gọn
+    } else {
+        [self rebuildAnimated:YES];
+    }
+}
+
+@end
+
+static ACGTabBoard *gACGTabBoard;   // giữ bảng khi khung đang mở
+
+static void ACGPresentTabEditor(void) {
+    UIWindow *window = AutoACKeyWindow();
+    if (!window || gMenu) return;
+    ACGTabBoard *board = [[ACGTabBoard alloc] initWithFrame:CGRectMake(0, 0, 320, 900)];
+    gACGTabBoard = board;
+    UIScrollView *scroll = [[UIScrollView alloc] init];
+    scroll.translatesAutoresizingMaskIntoConstraints = NO;
+    scroll.showsVerticalScrollIndicator = NO;
+    scroll.delaysContentTouches = NO;
+    scroll.alwaysBounceVertical = NO;
+    board.scroll = scroll;
+    board.translatesAutoresizingMaskIntoConstraints = NO;
+    [scroll addSubview:board];
+    UIView *holder = [[UIView alloc] init];
+    holder.translatesAutoresizingMaskIntoConstraints = NO;
+    [holder addSubview:scroll];
+    NSLayoutConstraint *boardHeight = [board.heightAnchor constraintEqualToConstant:900];
+    board.heightConstraint = boardHeight;
+    NSLayoutConstraint *wish = [holder.heightAnchor constraintEqualToConstant:4000];   // muốn cao tối đa, khung tự giới hạn theo màn hình
+    wish.priority = UILayoutPriorityDefaultLow;
+    [NSLayoutConstraint activateConstraints:@[
+        wish, boardHeight,
+        [scroll.topAnchor constraintEqualToAnchor:holder.topAnchor],
+        [scroll.bottomAnchor constraintEqualToAnchor:holder.bottomAnchor],
+        [scroll.leadingAnchor constraintEqualToAnchor:holder.leadingAnchor constant:16],
+        [scroll.trailingAnchor constraintEqualToAnchor:holder.trailingAnchor constant:-16],
+        [board.topAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.topAnchor],
+        [board.bottomAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.bottomAnchor],
+        [board.leadingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.leadingAnchor],
+        [board.trailingAnchor constraintEqualToAnchor:scroll.contentLayoutGuide.trailingAnchor],
+        [board.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],
+    ]];
+    // Nút khôi phục: icon kính tròn bên phải đầu khung; hai chạm để tránh lỡ tay làm mất bố cục đã sắp
+    AutoACShowPanel(AutoACT(@"Tuỳ chỉnh tab"), AutoACT(@"Thứ tự, ẩn hiện, Liquid Glass"), holder, window.safeAreaInsets.top + 12,
+                    AutoACT(@"Khôi phục tab mặc định"), ^{
+        static CFTimeInterval armedAt = 0;
+        CFTimeInterval now = CACurrentMediaTime();
+        if (armedAt > 0 && now - armedAt < 4.0) {
+            armedAt = 0;
+            [gACGTabBoard restoreYouTubeDefaults];
+            [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeSuccess];
+            AutoACShowHub(@"arrow.counterclockwise", UIColor.systemGreenColor, AutoACT(@"Đã khôi phục tab mặc định"), nil, 2.0);
+            return;
+        }
+        armedAt = now;
+        [[UINotificationFeedbackGenerator new] notificationOccurred:UINotificationFeedbackTypeWarning];
+        AutoACShowHub(@"arrow.counterclockwise", UIColor.systemOrangeColor, AutoACT(@"Chạm lần nữa để khôi phục tab"), AutoACT(@"Trong 4 giây"), 3.0);
+    });
+}
+
+
 #pragma mark - Dung lượng ứng dụng
 
 // Ghi chú ngắn cho từng thư mục lớn để biết mục nào dọn được
@@ -8042,6 +8475,18 @@ static NSArray<AutoACItem *> *AutoACBuildItems(void) {
     [items addObject:ACSwitch(AutoACT(@"Quảng cáo"), AutoACT(@"Ẩn nhãn trả phí"), AutoACT(@"Có quảng cáo trả phí"), @"tag.slash.fill",
         UIColor.systemOrangeColor, kHidePaidPromoKey,
         AutoACT(@"Ẩn nhãn \"Có quảng cáo trả phí\" hiện trên trình phát khi video có nội dung được tài trợ. Chỉ ẩn nhãn, không chặn nội dung của video."), nil)];
+    [items addObject:ACSwitch(AutoACT(@"Giao diện"), AutoACT(@"Shorts tràn xuống thanh tab"), AutoACT(@"Dock trong suốt, không dải trắng/đen"), @"rectangle.bottomthird.inset.filled",
+        UIColor.systemTealColor, kShortsFullBleedKey,
+        AutoACT(@"Ở tab Shorts, nền dưới video và thanh tab trong suốt (không trắng, không đen) và video kéo xuống tận thanh tab như các tab khác. Thử nghiệm: nếu Shorts bị lệch hoặc cuộn giật, tắt công tắc này. Chỉ có tác dụng khi thanh tab ở chế độ kính lỏng."), nil)];
+    [items addObject:ACSwitch(AutoACT(@"Giao diện"), AutoACT(@"Kính lỏng thanh trên"), AutoACT(@"Nút tìm kiếm, thông báo, quay lại"), @"magnifyingglass.circle.fill",
+        UIColor.systemCyanColor, kGlassTopKey,
+        AutoACT(@"Đặt nền kính lỏng sau cụm nút bên phải của thanh trên (tìm kiếm, thông báo…) và nút nhỏ bên trái như nút quay lại. Cần iOS 26 trở lên. Ý tưởng theo ytkace (MIT)."), nil)];
+    [items addObject:ACSwitch(AutoACT(@"Giao diện"), AutoACT(@"Kính lỏng bảng chọn"), AutoACT(@"Bảng, menu và hộp thoại"), @"rectangle.bottomhalf.inset.filled",
+        UIColor.systemCyanColor, kGlassSheetKey,
+        AutoACT(@"Thay nền đặc của bảng chọn đáy màn hình, menu ngữ cảnh và hộp thoại bằng kính lỏng. Cần iOS 26 trở lên. Nếu chữ khó đọc hoặc bảng bị lệch, tắt công tắc này."), nil)];
+    [items addObject:ACSwitch(AutoACT(@"Giao diện"), AutoACT(@"Kính lỏng trình phát"), AutoACT(@"Nút nổi trên video"), @"play.rectangle.fill",
+        UIColor.systemCyanColor, kGlassPlayerKey,
+        AutoACT(@"Đổi nền mờ của các nút nổi trong trình phát (YTFrostedGlassView) sang kính lỏng. Cần iOS 26 trở lên."), nil)];
     [items addObject:ACSwitch(AutoACT(@"Giao diện"), AutoACT(@"Ẩn hiệu ứng mở"), AutoACT(@"Vào thẳng trang chủ"), @"bolt.fill",
         UIColor.systemOrangeColor, kNoLaunchAnimKey,
         AutoACT(@"Ẩn hiệu ứng logo YouTube lúc khởi động để vào app nhanh hơn."), nil)];
@@ -8522,6 +8967,7 @@ static NSString *AutoACDiagnosticsText(void) {
     [t appendFormat:@"\n[Lọc danh sách] tab hiện tại %@ · %@\n", gListTabIdent.length ? gListTabIdent : @"?",
         gListFilterAllowed ? @"đang lọc" : (gListTabIdent.length ? @"không lọc (chỉ lọc ở Trang chủ)" : @"không lọc (chưa đọc được tab)")];
     [t appendFormat:@"[Lọc danh sách] bỏ hàng Short %ld · bài đăng %ld · Mix %ld · game %ld · thẻ Premium %ld\n", (long)gDropShelf, (long)gDropPost, (long)gDropMix, (long)gDropGame, (long)gDropBanner];
+    if (gACGShortsExtendDiag) [t appendFormat:@"[Short kéo xuống] %@\n", gACGShortsExtendDiag];
     if (gPremiumSeen.count) [t appendFormat:@"[Thẻ Premium/Music đã thấy] %@\n", [gPremiumSeen.array componentsJoinedByString:@" | "]];
     if (gOverlaySeen.count) [t appendFormat:@"\n[%@]\n%@\n", AutoACT(@"Mã lớp phủ Shorts"), [gOverlaySeen.array componentsJoinedByString:@"\n"]];
     return t;
@@ -9474,8 +9920,360 @@ static void AutoACInstallShortsShelfHooks(void) {
     });
 }
 
+
+#pragma mark - Kính lỏng cho thanh trên, bảng chọn và trình phát
+// Tự viết lại ý tưởng của GlassChrome / GlassSheets / PlayerGlass trong ytkace (giấy phép MIT): đặt lớp UIGlassEffect phía sau
+// các phần giao diện gốc của YouTube. Chỉ chạy khi máy có UIGlassEffect (iOS 26+); mỗi phần có công tắc riêng và tự gỡ khi tắt.
+
+static const void *kAGlassAssoc = &kAGlassAssoc;
+static const void *kAGlassLeftAssoc = &kAGlassLeftAssoc;
+
+static BOOL AutoACGlassOn(NSString *key) { return ACGLiquidGlassAvailable() && [kPrefs boolForKey:key]; }
+
+static UIVisualEffectView *AutoACMakeGlassView(void) {
+    UIVisualEffectView *glass = [[UIVisualEffectView alloc] initWithEffect:ACGMakeGlassEffect(NO)];
+    glass.userInteractionEnabled = NO;
+    glass.clipsToBounds = YES;
+    glass.layer.cornerCurve = kCACornerCurveContinuous;
+    return glass;
+}
+
+static UIView *AutoACFindClass(UIView *root, NSString *name, int depth) {
+    if ([NSStringFromClass(root.class) isEqualToString:name]) return root;
+    if (depth <= 0) return nil;
+    for (UIView *sub in root.subviews) {
+        UIView *found = AutoACFindClass(sub, name, depth - 1);
+        if (found) return found;
+    }
+    return nil;
+}
+
+// ── Trình phát: nền mờ YTFrostedGlassView của các nút nổi → kính lỏng ──
+static BOOL AutoACInPlayerControls(UIView *view) {
+    int depth = 0;
+    for (UIView *current = view.superview; current != nil && depth < 10; current = current.superview, depth++) {
+        NSString *name = NSStringFromClass(current.class);
+        if ([name containsString:@"Overlay"] || [name containsString:@"Player"] || [name containsString:@"Fullscreen"] ||
+            [name containsString:@"Watch"]) return YES;
+    }
+    return NO;
+}
+
+static void AutoACApplyPlayerGlass(UIView *frosted) {
+    UIVisualEffectView *glass = objc_getAssociatedObject(frosted, kAGlassAssoc);
+    NSMutableArray<UIView *> *layers = [NSMutableArray array];
+    for (NSString *key in @[@"_blurEffectView", @"_overlayView"]) {
+        id v = nil;
+        @try { v = [frosted valueForKey:key]; } @catch (__unused NSException *e) {}
+        if ([v isKindOfClass:UIView.class]) [layers addObject:v];
+    }
+    if (!(AutoACGlassOn(kGlassPlayerKey) && AutoACInPlayerControls(frosted))) {
+        if (glass) {
+            [glass removeFromSuperview];
+            objc_setAssociatedObject(frosted, kAGlassAssoc, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            for (UIView *v in layers) v.alpha = 1.0;
+        }
+        return;
+    }
+    if (!glass) {
+        glass = AutoACMakeGlassView();
+        objc_setAssociatedObject(frosted, kAGlassAssoc, glass, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    for (UIView *v in layers) v.alpha = 0.0;
+    if (glass.superview != frosted) [frosted insertSubview:glass atIndex:0];
+    glass.frame = frosted.bounds;
+    CGFloat capsule = MIN(CGRectGetWidth(frosted.bounds), CGRectGetHeight(frosted.bounds)) * 0.5;
+    CGFloat radius = frosted.layer.cornerRadius;
+    glass.layer.cornerRadius = radius > 0.0 ? MIN(radius, capsule) : capsule;
+    frosted.backgroundColor = UIColor.clearColor;
+}
+
+// ── Thanh trên: viên kính sau cụm nút bên phải (tìm kiếm, thông báo…) và vòng tròn sau nút nhỏ bên trái (quay lại) ──
+static void AutoACPlaceGlassBehind(UIVisualEffectView *glass, UIView *view, CGRect frame, CGFloat radius) {
+    UIView *host = view.superview;
+    if (!host) return;
+    if (glass.superview != host) {
+        [glass removeFromSuperview];
+        [host insertSubview:glass belowSubview:view];
+    } else {
+        NSUInteger gi = [host.subviews indexOfObjectIdenticalTo:glass], vi = [host.subviews indexOfObjectIdenticalTo:view];
+        if (gi == NSNotFound || vi == NSNotFound || gi + 1 != vi) [host insertSubview:glass belowSubview:view];
+    }
+    glass.frame = frame;
+    glass.layer.cornerRadius = radius;
+}
+
+static void AutoACCollectControlsUnion(UIView *view, UIView *space, CGRect *rect, NSInteger *count) {
+    for (UIView *sub in view.subviews) {
+        if (sub.hidden || sub.alpha <= 0.01 || CGRectIsEmpty(sub.bounds)) continue;
+        if ([sub isKindOfClass:UIControl.class]) {
+            CGRect r = [space convertRect:sub.bounds fromView:sub];
+            *rect = *count == 0 ? r : CGRectUnion(*rect, r);
+            (*count)++;
+            continue;
+        }
+        AutoACCollectControlsUnion(sub, space, rect, count);
+    }
+}
+
+static void AutoACUpdateRightGlass(UIView *container) {
+    UIVisualEffectView *glass = objc_getAssociatedObject(container, kAGlassAssoc);
+    CGRect rect = CGRectZero;
+    NSInteger count = 0;
+    BOOL on = AutoACGlassOn(kGlassTopKey) && container.window && container.superview && !CGRectIsEmpty(container.bounds);
+    if (on) AutoACCollectControlsUnion(container, container, &rect, &count);
+    if (!on || count == 0) {
+        if (glass) { [glass removeFromSuperview]; objc_setAssociatedObject(container, kAGlassAssoc, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+        return;
+    }
+    if (!glass) {
+        glass = AutoACMakeGlassView();
+        objc_setAssociatedObject(container, kAGlassAssoc, glass, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    CGRect area = CGRectIntersection(CGRectInset(rect, -8.0, -4.0), CGRectInset(container.bounds, -10.0, -6.0));
+    CGFloat height = MAX(40.0, CGRectGetHeight(area)), width = MAX(height, CGRectGetWidth(area));
+    CGRect local = CGRectMake(CGRectGetMidX(area) - width * 0.5, CGRectGetMidY(area) - height * 0.5, width, height);
+    AutoACPlaceGlassBehind(glass, container, [container convertRect:local toView:container.superview], height * 0.5);
+}
+
+static BOOL AutoACHeaderButtonHasContent(UIButton *b) {
+    if (b.hidden || b.alpha <= 0.01) return NO;
+    if (b.currentImage || b.currentTitle.length || b.currentBackgroundImage) return YES;
+    for (UIView *sub in b.subviews) {
+        if (sub.hidden || sub.alpha <= 0.01 || CGRectIsEmpty(sub.bounds)) continue;
+        if ([sub isKindOfClass:UIImageView.class] && ((UIImageView *)sub).image) return YES;
+    }
+    return NO;
+}
+
+static void AutoACCollectHeaderButtons(UIView *view, NSMutableArray<UIButton *> *out) {
+    for (UIView *sub in view.subviews) {
+        if (sub.hidden || sub.alpha <= 0.01 || CGRectIsEmpty(sub.bounds)) continue;
+        if ([sub isKindOfClass:UIButton.class] && CGRectGetWidth(sub.bounds) <= 64.0 && CGRectGetHeight(sub.bounds) <= 64.0 &&
+            AutoACHeaderButtonHasContent((UIButton *)sub)) { [out addObject:(UIButton *)sub]; continue; }
+        AutoACCollectHeaderButtons(sub, out);
+    }
+}
+
+static void AutoACUpdateHeaderGlass(UIView *header) {
+    UIVisualEffectView *glass = objc_getAssociatedObject(header, kAGlassLeftAssoc);
+    BOOL on = AutoACGlassOn(kGlassTopKey) && header.window && !CGRectIsEmpty(header.bounds);
+    UIButton *best = nil;
+    if (on) {
+        NSMutableArray<UIButton *> *buttons = [NSMutableArray array];
+        AutoACCollectHeaderButtons(header, buttons);
+        CGFloat width = CGRectGetWidth(header.bounds), bestX = CGFLOAT_MAX;
+        for (UIButton *b in buttons) {
+            CGRect f = [header convertRect:b.bounds fromView:b];
+            if (CGRectGetMidX(f) >= width * 0.5 || CGRectGetMinX(f) > width * 0.28) continue;
+            if (CGRectGetMinX(f) < bestX) { bestX = CGRectGetMinX(f); best = b; }
+        }
+    }
+    if (!best) {
+        if (glass) { [glass removeFromSuperview]; objc_setAssociatedObject(header, kAGlassLeftAssoc, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC); }
+        return;
+    }
+    if (!glass) {
+        glass = AutoACMakeGlassView();
+        objc_setAssociatedObject(header, kAGlassLeftAssoc, glass, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    CGRect f = [header convertRect:best.bounds fromView:best];
+    CGFloat d = MAX(40.0, MAX(CGRectGetWidth(f), CGRectGetHeight(f)));
+    CGRect circle = CGRectMake(CGRectGetMidX(f) - d * 0.5, CGRectGetMidY(f) - d * 0.5, d, d);
+    UIView *host = best.superview;
+    if (!host) return;
+    if (glass.superview != host) { [glass removeFromSuperview]; [host insertSubview:glass belowSubview:best]; }
+    glass.frame = [host convertRect:circle fromView:header];
+    glass.layer.cornerRadius = d * 0.5;
+}
+
+// ── Bảng chọn, hộp thoại: nền kính lỏng thay nền đặc ──
+static BOOL AutoACColorSolid(UIColor *c) {
+    CGFloat r = 0, g = 0, b = 0, a = 0;
+    return c != nil && [c getRed:&r green:&g blue:&b alpha:&a] && a > 0.3;
+}
+
+static void AutoACClearELMBackground(UIView *view, UIView *sheet, int depth) {
+    if (depth > 4) return;
+    for (UIView *sub in view.subviews) {
+        if (![NSStringFromClass(sub.class) isEqualToString:@"_ASDisplayView"]) continue;
+        if (AutoACColorSolid(sub.backgroundColor) && CGRectGetWidth(sub.bounds) >= CGRectGetWidth(sheet.bounds) * 0.9 &&
+            CGRectGetHeight(sub.bounds) >= 40.0) {
+            id node = nil;
+            @try { node = [sub valueForKey:@"asyncdisplaykit_node"]; } @catch (__unused NSException *e) {}
+            if ([node respondsToSelector:@selector(setBackgroundColor:)])
+                ((void (*)(id, SEL, id))objc_msgSend)(node, @selector(setBackgroundColor:), UIColor.clearColor);
+            else sub.backgroundColor = UIColor.clearColor;
+        }
+        AutoACClearELMBackground(sub, sheet, depth + 1);
+    }
+}
+
+static void AutoACClearSheetBackgrounds(UIView *view, UIView *sheet, UIView *glass, int depth) {
+    if (depth > 10) return;
+    static NSSet<NSString *> *containers;
+    static dispatch_once_t once;
+    dispatch_once(&once, ^{
+        containers = [NSSet setWithArray:@[@"YTDraggableView", @"YTDialogContainerScrollView", @"GOODialogView", @"YTContextualWrapView",
+                                           @"YTActionSheetHeaderView", @"UIScrollView", @"GOODialogContentView", @"YTMinimumWidthDialogView"]];
+    });
+    for (UIView *sub in view.subviews) {
+        if (sub == glass) continue;
+        NSString *name = NSStringFromClass(sub.class);
+        if ([name hasSuffix:@"ELMView"]) { AutoACClearELMBackground(sub, sheet, 0); continue; }
+        if ([name hasPrefix:@"_AS"] || [name hasPrefix:@"AS"]) continue;
+        if ([containers containsObject:name] && AutoACColorSolid(sub.backgroundColor)) sub.backgroundColor = UIColor.clearColor;
+        AutoACClearSheetBackgrounds(sub, sheet, glass, depth + 1);
+    }
+}
+
+static void AutoACApplyPanelGlass(UIView *sheet, CGFloat fallbackRadius, BOOL allCorners) {
+    UIVisualEffectView *glass = objc_getAssociatedObject(sheet, kAGlassAssoc);
+    if (!glass) {
+        glass = AutoACMakeGlassView();
+        glass.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        objc_setAssociatedObject(sheet, kAGlassAssoc, glass, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (glass.superview != sheet) [sheet insertSubview:glass atIndex:0];
+    else if (sheet.subviews.firstObject != glass) [sheet sendSubviewToBack:glass];
+    glass.frame = sheet.bounds;
+    CGFloat radius = sheet.layer.cornerRadius > 0.0 ? sheet.layer.cornerRadius : fallbackRadius;
+    glass.layer.cornerRadius = radius;
+    glass.layer.maskedCorners = allCorners ? (kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner | kCALayerMinXMaxYCorner | kCALayerMaxXMaxYCorner)
+        : (sheet.layer.cornerRadius > 0.0 ? sheet.layer.maskedCorners : (kCALayerMinXMinYCorner | kCALayerMaxXMinYCorner));
+    sheet.backgroundColor = UIColor.clearColor;
+    AutoACClearSheetBackgrounds(sheet, sheet, glass, 0);
+}
+
+static void AutoACClearShadows(UIView *view, UIView *stop) {
+    for (UIView *c = view; c != nil && c != stop; c = c.superview) if (c.layer.shadowOpacity > 0.0) c.layer.shadowOpacity = 0.0;
+}
+
+static void AutoACApplySheetGlass(UIViewController *controller) {
+    if (!AutoACGlassOn(kGlassSheetKey) || !controller.isViewLoaded) return;
+    UIView *sheet = AutoACFindClass(controller.view, @"YTDraggableView", 8);
+    if (!sheet) {
+        sheet = AutoACFindClass(controller.view, @"YTContextualWrapView", 8);
+        if (sheet) AutoACClearShadows(sheet, controller.view.window);
+    }
+    if (!sheet || CGRectIsEmpty(sheet.bounds)) return;
+    AutoACApplyPanelGlass(sheet, 24.0, NO);
+}
+
+static void AutoACApplyModalGlass(UIView *modal) {
+    if (!AutoACGlassOn(kGlassSheetKey) || !modal.window) return;
+    UIView *dialog = nil;
+    @try { dialog = [modal valueForKey:@"_dialogView"]; } @catch (__unused NSException *e) {}
+    if (![dialog isKindOfClass:UIView.class] || CGRectIsEmpty(dialog.bounds)) return;
+    AutoACClearShadows(dialog, modal.superview);
+    dialog.layer.shadowOpacity = 0.0;
+    AutoACApplyPanelGlass(dialog, 28.0, YES);
+    if (dialog.layer.cornerRadius < 12.0) { dialog.layer.cornerRadius = 28.0; dialog.layer.cornerCurve = kCACornerCurveContinuous; }
+    dialog.clipsToBounds = YES;
+}
+
+static void AutoACApplySheetGlassLater(UIViewController *controller) {
+    __weak UIViewController *weak = controller;
+    for (NSNumber *delay in @[@0.05, @0.15, @0.3, @0.6, @1.0]) {
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(delay.doubleValue * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+            UIViewController *c = weak;
+            if (c && c.view.window) AutoACApplySheetGlass(c);
+        });
+    }
+}
+
+static void AutoACInstallGlassChromeHooks(void) {
+    if (!ACGLiquidGlassAvailable()) return;
+    // Trình phát
+    for (NSString *name in @[@"layoutSubviews", @"didMoveToWindow"]) {
+        AutoACHook(@"YTFrostedGlassView", name, NO, NULL, ^id(IMP original, SEL selector) {
+            return ^void(UIView *self_) {
+                if (original) ((void (*)(id, SEL))original)(self_, selector);
+                if (selector == @selector(didMoveToWindow) && self_.window) [self_ setNeedsLayout];
+                AutoACApplyPlayerGlass(self_);
+            };
+        });
+    }
+    // Thanh trên
+    for (NSString *name in @[@"layoutSubviews", @"didMoveToWindow", @"didMoveToSuperview"]) {
+        AutoACHook(@"YTRightNavigationButtons", name, NO, NULL, ^id(IMP original, SEL selector) {
+            return ^void(UIView *self_) {
+                if (original) ((void (*)(id, SEL))original)(self_, selector);
+                AutoACUpdateRightGlass(self_);
+            };
+        });
+    }
+    for (NSString *name in @[@"layoutSubviews", @"didMoveToWindow"]) {
+        AutoACHook(@"YTHeaderView", name, NO, NULL, ^id(IMP original, SEL selector) {
+            return ^void(UIView *self_) {
+                if (original) ((void (*)(id, SEL))original)(self_, selector);
+                AutoACUpdateHeaderGlass(self_);
+            };
+        });
+    }
+    // Bảng chọn (view controller)
+    for (NSString *cls in @[@"YTBottomSheetController", @"YTContextualSheetViewController"]) {
+        AutoACHook(cls, @"viewWillLayoutSubviews", NO, NULL, ^id(IMP original, SEL selector) {
+            return ^void(UIViewController *self_) {
+                if (original) ((void (*)(id, SEL))original)(self_, selector);
+                if (!AutoACGlassOn(kGlassSheetKey)) return;
+                __weak UIViewController *weak = self_;
+                dispatch_async(dispatch_get_main_queue(), ^{ if (weak) AutoACApplySheetGlass(weak); });
+            };
+        });
+        AutoACHook(cls, @"viewWillAppear:", NO, NULL, ^id(IMP original, SEL selector) {
+            return ^void(UIViewController *self_, BOOL animated) {
+                if (original) ((void (*)(id, SEL, BOOL))original)(self_, selector, animated);
+                if (!AutoACGlassOn(kGlassSheetKey)) return;
+                [self_.view layoutIfNeeded];
+                AutoACApplySheetGlass(self_);
+            };
+        });
+        AutoACHook(cls, @"viewDidAppear:", NO, NULL, ^id(IMP original, SEL selector) {
+            return ^void(UIViewController *self_, BOOL animated) {
+                if (original) ((void (*)(id, SEL, BOOL))original)(self_, selector, animated);
+                AutoACApplySheetGlass(self_);
+                AutoACApplySheetGlassLater(self_);
+            };
+        });
+    }
+    AutoACHook(@"YTContextualSheetPresentationController", @"presentationTransitionWillBegin", NO, NULL, ^id(IMP original, SEL selector) {
+        return ^void(UIPresentationController *self_) {
+            if (original) ((void (*)(id, SEL))original)(self_, selector);
+            UIViewController *presented = self_.presentedViewController;
+            [presented.view layoutIfNeeded];
+            AutoACApplySheetGlass(presented);
+        };
+    });
+    AutoACHook(@"YTContextualSheetPresentationController", @"containerViewDidLayoutSubviews", NO, NULL, ^id(IMP original, SEL selector) {
+        return ^void(UIPresentationController *self_) {
+            if (original) ((void (*)(id, SEL))original)(self_, selector);
+            AutoACApplySheetGlass(self_.presentedViewController);
+        };
+    });
+    // Hộp thoại
+    for (NSArray<NSString *> *entry in @[@[@"GOOAlertView", @"layoutSubviews"], @[@"GOOAlertView", @"revealDialog"],
+                                         @[@"YTAlertView", @"layoutSubviews"],
+                                         @[@"YTReportFormModalAlertView", @"layoutSubviews"], @[@"YTReportFormModalAlertView", @"revealDialog"],
+                                         @[@"GOOModalView", @"show"], @[@"GOOModalView", @"reposition"]]) {
+        AutoACHook(entry[0], entry[1], NO, NULL, ^id(IMP original, SEL selector) {
+            return ^void(UIView *self_) {
+                if (original) ((void (*)(id, SEL))original)(self_, selector);
+                AutoACApplyModalGlass(self_);
+            };
+        });
+    }
+}
+
 static void AutoACInstallContentHooks(void) {
     AutoACInstallShortsShelfHooks();
+    AutoACHook(@"YTReelWatchRootView", @"layoutSubviews", NO, "v", ^id(IMP original, SEL selector) {
+        return ^void(UIView *self_) {
+            if (original) ((void (*)(id, SEL))original)(self_, selector);
+            gACGReelRoot = self_;
+            ACGExtendShortsRoot(self_);
+        };
+    });
     AutoACHook(@"_ASDisplayView", @"didMoveToWindow", NO, "v", ^id(IMP original, SEL selector) {
         return ^void(UIView *self_) {
             if (original) ((void (*)(id, SEL))original)(self_, selector);
@@ -10192,22 +10990,23 @@ static void AutoACShowSpeedPicker(UIView *button) {
 // Hẹn giờ ngủ: cùng bánh xe với tốc độ. Hàng đầu là Tắt; thời gian ghi "số + min" (min: tiếng Anh và tiếng Việt đều hiểu).
 // Đặt hẹn giờ khi cuộn dừng hẳn, không đặt lại ở từng hàng đi ngang qua
 static void AutoACShowSleepWheel(UIView *button) {
-    NSArray<NSNumber *> *minutes = @[@0, @(-1), @5, @10, @15, @20, @30, @45, @60, @90, @120];   // 0 = tắt, -1 = cuối video
+    NSArray<NSNumber *> *minutes = @[@0, @5, @10, @15, @20, @30, @45, @60, @90, @120, @(-1)];   // 0 = tắt, -1 = End (hết video), đặt cuối cùng
     NSMutableArray<NSString *> *texts = [NSMutableArray array];
     for (NSNumber *m in minutes) {
         NSInteger v = m.integerValue;
-        [texts addObject:v == 0 ? AutoACT(@"Tắt") : (v < 0 ? AutoACT(@"Cuối video") : [NSString stringWithFormat:@"%@ min", m])];
+        [texts addObject:v == 0 ? AutoACT(@"Tắt") : (v < 0 ? AutoACT(@"End") : [NSString stringWithFormat:@"%@ min", m])];
     }
+    NSInteger endRow = (NSInteger)minutes.count - 1;
     NSInteger start = 0;
-    if (gSleepAtEnd) start = 1;
+    if (gSleepAtEnd) start = endRow;
     else if (gSleepEnd) {   // đang hẹn giờ: đặt bánh xe ở mức gần thời gian còn lại nhất
         double left = MAX(0, gSleepEnd.timeIntervalSinceNow) / 60.0, best = 1e9;
-        for (NSUInteger i = 2; i < minutes.count; i++) { double d = fabs(minutes[i].doubleValue - left); if (d < best) { best = d; start = (NSInteger)i; } }
+        for (NSInteger i = 1; i < endRow; i++) { double d = fabs(minutes[(NSUInteger)i].doubleValue - left); if (d < best) { best = d; start = i; } }
     }
     NSMutableIndexSet *accent = [NSMutableIndexSet indexSetWithIndex:0];
-    [accent addIndex:1];
+    [accent addIndex:(NSUInteger)endRow];
     AutoACShowWheel(button, texts, accent, start, nil, ^(NSInteger r) {
-        NSInteger m = minutes[r].integerValue;
+        NSInteger m = minutes[(NSUInteger)r].integerValue;
         if (m == 0 && !AutoACSleepActive()) return;   // chưa hẹn giờ mà chọn Tắt: không có gì để tắt
         AutoACSetSleepTimer(m);
     });
@@ -10944,6 +11743,7 @@ static void AutoACInstallFeatureHooks(void) {
     AutoACInstallPromoHooks();
     AutoACInstallPaidPromoHooks();
     AutoACInstallStartupHooks();
+    AutoACInstallGlassChromeHooks();
 
     // ── Ghi nhớ trình phát đang hoạt động (cho tải xuống, hẹn giờ, sao chép liên kết) ──
     AutoACHook(@"YTPlayerViewController", @"playbackController:didActivateVideo:withPlaybackData:", NO, "v40",
@@ -11037,7 +11837,7 @@ static void AutoACInstallFeatureHooks(void) {
     }
     [kPrefs registerDefaults:@{kAutoClearCacheKey: @YES, kYTXAdsKey: @YES, kYTXBackgroundKey: @YES,
                                                               kAskQualityKey: @YES, kShareAfterKey: @YES,
-                               kAskDestKey: @YES, kHidePromosKey: @YES, kHidePaidPromoKey: @YES, kHideMusicPremiumKey: @YES, kSponsorAlertKey: @YES,
+                               kAskDestKey: @YES, kHidePromosKey: @YES, kHidePaidPromoKey: @YES, kHideMusicPremiumKey: @YES, kShortsFullBleedKey: @YES, kGlassTopKey: @YES, kGlassSheetKey: @YES, kGlassPlayerKey: @YES, kSponsorAlertKey: @YES,
                                kDiagKey: @YES, kPlayerButtonKey: @YES, kCommentToolsKey: @YES, kPostImageKey: @YES, kPlayerFloatKey: @YES, kPlayerSpeedBtnKey: @YES, kPlayerPiPKey: @YES, kPlayerSleepBtnKey: @YES, kPlayerExternalKey: @YES, kShortsNoLoopKey: @YES}];
     [kPrefs removeObjectForKey:@"ACG.Preference.Tabs.ShortsDarkOff"];   // 2.1.66-2.1.68: công tắc Dock tối ở Short đã bỏ
     AutoACOverlayMigrateLegacy();   // 2.1.64: hai công tắc hàng trên/hàng dưới → Tuỳ chỉnh Overlay
@@ -11513,9 +12313,29 @@ static NSDictionary<NSString *, NSString *> *AutoACEnglishTable(void) {
         @"Chặn Music Premium": @"Block Music Premium",
         @"Thẻ mời dùng thử trong bảng tin": @"Trial banners in the feed",
         @"Ẩn thẻ mời dùng thử hoặc mua YouTube Music Premium (và các thẻ mời nâng cấp tương tự) hiện giữa bảng tin. Thẻ được gỡ khỏi danh sách nên không để lại khoảng trống. Cần mở lại app. Popup mời mua Premium do công tắc No premium lo.": @"Hides cards inviting you to try or buy YouTube Music Premium (and similar upgrade cards) shown in the feed. Cards are removed from the list, so no gap is left. Requires restarting the app. Premium purchase popups are handled by the No premium switch.",
-        @"Cuối video": @"End of video",
+        @"End": @"End",
         @"Dừng khi hết video": @"Stops when the video ends",
         @"Hết video": @"Video ended",
+        @"Shorts tràn xuống thanh tab": @"Shorts fill down to the tab bar",
+        @"Dock trong suốt, không dải trắng/đen": @"Transparent dock, no white/black strip",
+        @"Ở tab Shorts, nền dưới video và thanh tab trong suốt (không trắng, không đen) và video kéo xuống tận thanh tab như các tab khác. Thử nghiệm: nếu Shorts bị lệch hoặc cuộn giật, tắt công tắc này. Chỉ có tác dụng khi thanh tab ở chế độ kính lỏng.": @"On the Shorts tab, the area under the video and the tab bar are transparent (not white, not black) and the video extends down to the tab bar like on the other tabs. Experimental: if Shorts looks misaligned or scrolls with stutter, turn this switch off. Only works when the tab bar is in liquid-glass mode.",
+        @"Kính lỏng thanh trên": @"Liquid glass top bar",
+        @"Nút tìm kiếm, thông báo, quay lại": @"Search, notifications and back buttons",
+        @"Đặt nền kính lỏng sau cụm nút bên phải của thanh trên (tìm kiếm, thông báo…) và nút nhỏ bên trái như nút quay lại. Cần iOS 26 trở lên. Ý tưởng theo ytkace (MIT).": @"Puts a liquid-glass background behind the right-hand button group of the top bar (search, notifications…) and the small left button such as Back. Requires iOS 26 or later. Idea based on ytkace (MIT).",
+        @"Kính lỏng bảng chọn": @"Liquid glass sheets",
+        @"Bảng, menu và hộp thoại": @"Sheets, menus and dialogs",
+        @"Thay nền đặc của bảng chọn đáy màn hình, menu ngữ cảnh và hộp thoại bằng kính lỏng. Cần iOS 26 trở lên. Nếu chữ khó đọc hoặc bảng bị lệch, tắt công tắc này.": @"Replaces the solid background of bottom sheets, context menus and dialogs with liquid glass. Requires iOS 26 or later. If text is hard to read or a sheet looks misaligned, turn this switch off.",
+        @"Kính lỏng trình phát": @"Liquid glass player",
+        @"Nút nổi trên video": @"Floating buttons on the video",
+        @"Đổi nền mờ của các nút nổi trong trình phát (YTFrostedGlassView) sang kính lỏng. Cần iOS 26 trở lên.": @"Turns the blurred backgrounds of the floating player buttons (YTFrostedGlassView) into liquid glass. Requires iOS 26 or later.",
+        @"Hiện": @"Show",
+        @"Ẩn": @"Hide",
+        @"Không hiện trên thanh tab": @"Not shown on the tab bar",
+        @"Kéo tab vào đây": @"Drag a tab here",
+        @"Trên thanh tab, từ trái sang phải": @"On the tab bar, left to right",
+        @"Đang hiện trên thanh tab": @"Shown on the tab bar",
+        @"Đang ẩn": @"Hidden",
+        @"Nhấn giữ một tab rồi kéo để đổi thứ tự hoặc chuyển giữa hai dải. Chạm một tab để chọn, rồi ẩn/hiện hoặc đổi tên ở thẻ bên dưới. Thay đổi tab có hiệu lực sau khi mở lại app.": @"Press and hold a tab, then drag it to reorder or to move it between the two strips. Tap a tab to select it, then show/hide or rename it in the card below. Tab changes take effect after restarting the app.",
         @"Không hiện": @"Hidden",
         @"Vị trí Overlay": @"Overlay position",
         @"Nhấn giữ một nút rồi kéo để đổi thứ tự hoặc sang hàng khác. Chạm một nút để chọn, rồi đặt vị trí bằng nút kính ở trên (Tất cả = cả hai hàng). Thứ tự đọc từ trái sang phải: nút cuối cùng nằm sát nút bánh răng (hàng trên) hoặc sát nút toàn màn hình (hàng dưới).": @"Press and hold a button, then drag to reorder it or move it to another row. Tap a button to select it, then set its position with the glass button above (All = both rows). Order reads left to right: the last button sits next to the gear button (top row) or the fullscreen button (bottom row).",
