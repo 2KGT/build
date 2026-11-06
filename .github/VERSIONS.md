@@ -24,7 +24,6 @@
 | `scripts/upstream.py` | _chưa đánh số_ | — | — |
 | `scripts/versions.py` | **1.0.0** | 2026-11-06 | tự dựng VERSIONS.md từ dòng version trong file + git log; cảnh báo quên tăng số |
 | `tweaks.catalog.json` | _chưa đánh số_ | — | — |
-| `workflows/tweaks.yml` | _chưa đánh số_ | — | — |
 
 File _chưa đánh số_ sẽ được ghi số ở lần sửa tiếp theo của chính file đó.
 
