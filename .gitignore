@@ -9,8 +9,8 @@
 *.gz
 
 # Chặn các file danh sách nguồn (Nếu có phát sinh lúc test script)
-Packages*
-Release*
+/Packages*
+/Release*
 apps.json
 
 # ==========================================
@@ -61,3 +61,30 @@ DerivedData/
 .Trashes
 ehthumbs.db
 Thumbs.db
+
+# ==========================================
+# 🧪 SINH RA TRONG LÚC CHẠY WORKFLOW (không bao giờ commit)
+# ==========================================
+/theos_engine/
+/output/
+/public_repo_target/
+/.work/
+/packages/
+
+# Symlink/thư mục do handler tạo trong từng dự án (nối headers/ và kho PoomSmart)
+/*/*Header
+/*/config_fb/
+# Source upstream do upstream.py sinh lại mỗi lần build (bị ghi đè, không sửa tay)
+/*/Upstream_*.x
+/*/Upstream_*.xm
+
+# ==========================================
+# 📌 NGOẠI LỆ: header đã dump luôn được theo dõi
+# (chặn các mẫu như Release*, Packages*, temp_*, build/ nuốt nhầm tên class của app)
+# ==========================================
+!/headers/
+!/headers/**
+
+# Rác hệ điều hành vẫn bị chặn kể cả trong headers/
+.DS_Store
+._*
