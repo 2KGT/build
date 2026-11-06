@@ -1,4 +1,4 @@
-name: 📦 Đóng gói (IPA · Cyan · TrollFools · DEB)
+name: Đóng gói (IPA · Cyan · TrollFools · DEB)
 
 # ┌─ THAY THẾ main.yml + cyan_ts.yml + ipa.yml (+ _build_tweaks.yml) ────────────
 # │ Mọi nguồn tweak → MỘT danh sách token → bể pool/ → (ký giả) → đầu ra
