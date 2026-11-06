@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
     inputs:
       project:
-        description: '📦 Dự án (None = chưa chọn, sẽ dừng)'
+        description: '📦 Dự án (None = Stop)'
         required: true
         type: choice
         default: 'None'
@@ -22,7 +22,7 @@ on:
         default: 'Patch (Vá lỗi)'
         options: [ 'Patch (Vá lỗi)', 'Minor (Tính năng)', 'Major (Đại tu)', 'Giữ nguyên' ]
       clean_build:
-        description: '🧼 make clean trước khi build'
+        description: '🧼 Làm sạch trước khi build'
         type: boolean
         default: true
 
@@ -40,7 +40,7 @@ on:
         type: boolean
         default: false
       run_clean_logs:
-        description: '🗑️ Dọn: reset commit + xoá runs & cache'
+        description: '🗑️ Dọn: reset commit + runs + cache'
         type: boolean
         default: false
       clean_delay_seconds:
