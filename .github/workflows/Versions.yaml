@@ -1,5 +1,5 @@
 # version: 1.0.0 | 2026-11-06 | tự dựng .github/VERSIONS.md khi push, cảnh báo quên tăng version
-name: 🔢 Cập nhật VERSIONS.md
+name: Update VERSIONS.md
 
 # ┌─ Không cần sửa VERSIONS.md bằng tay ─────────────────────────────────────────
 # │ Push thay đổi trong .github/ → workflow đọc dòng "version:" của từng file,
