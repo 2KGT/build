@@ -8,6 +8,7 @@
 "Bạn" = "You";
 "Bản dịch" = "Translation";
 "Bảng chia sẻ / Tệp" = "Share sheet / Files";
+"Bảng, menu và hộp thoại" = "Sheets, menus and dialogs";
 "Bật nhãn" = "Show labels";
 "Bật thu gọn" = "Minimize bar";
 "Bật tự bỏ qua" = "Auto skip";
@@ -41,11 +42,11 @@
 "Chọn tốc độ phát khi mở video (0.5x đến 3x) và số giây tua khi chạm đúp (5 đến 60 giây). Chọn Theo YouTube để dùng mặc định." = "Choose the playback speed used when a video opens (0.5x to 3x) and how many seconds a double-tap skips (5 to 60). Choose Follow YouTube to keep the default.";
 "Chọn và sắp xếp các nút AutoAC trên trình phát (tải xuống, tốc độ, PiP, hẹn giờ, phát ngoài): đặt ở hàng trên (dưới nút bánh răng) hoặc hàng dưới (cạnh nút toàn màn hình), kéo để đổi thứ tự hoặc chuyển hàng, hoặc tắt hẳn từng nút. Nhấn giữ biểu tượng Tốc độ để về tốc độ gốc. Nút tải chỉ áp dụng trong video; nút tải trong Shorts luôn bật." = "Choose and arrange AutoAC's player buttons (download, speed, PiP, sleep timer, external player): place them in the top row (under the gear button) or the bottom row (next to the fullscreen button), drag to reorder or move between rows, or switch each one off. Long-press the Speed icon to return to the original speed. The download button only applies in videos; the download button in Shorts is always on.";
 "Chờ video phát vài giây rồi thử lại" = "Let the video play for a few seconds, then try again";
-"Cuối video" = "End of video";
 "Có quảng cáo trả phí" = "Includes paid promotion";
 "Cạnh nút toàn màn hình" = "Next to the fullscreen button";
 "Cảnh xem trước, tóm tắt" = "Previews and recaps";
 "Cột nút bên phải" = "Right button column";
+"Dock trong suốt, không dải trắng/đen" = "Transparent dock, no white/black strip";
 "Dung lượng ứng dụng" = "App storage";
 "Dưới" = "Bottom";
 "Dưới nút bánh răng" = "Below the gear button";
@@ -59,8 +60,10 @@
 "Dữ liệu của app" = "App data";
 "Dữ liệu từ sponsor.ajay.app" = "Data from sponsor.ajay.app";
 "Dữ liệu web (đăng nhập, bộ nhớ trang)" = "Web data (sign-in, page storage)";
+"End" = "End";
 "Ghép video và âm thanh thất bại" = "Failed to merge video and audio";
 "Giao diện" = "Appearance";
+"Hiện" = "Show";
 "Hiện bảng chọn độ phân giải trước khi tải video. Tắt đi sẽ tải chất lượng cao nhất có thể." = "Shows a resolution picker before downloading a video. When off, the highest quality available is downloaded.";
 "Hiện nút lưu ở góc trên bên trái khi xem ảnh trong bài đăng cộng đồng, lưu bản gốc vào Ảnh. Cần mở lại app." = "Shows a save button in the top-left corner when viewing images in community posts and saves the original to Photos. Restart the app to apply.";
 "Hiện thông báo ngắn cho biết loại đoạn vừa được bỏ qua." = "Shows a short notice telling which segment type was just skipped.";
@@ -96,6 +99,7 @@
 "Không dịch được" = "Could not translate";
 "Không ghép được video và âm thanh" = "Could not merge video and audio";
 "Không hiện" = "Hidden";
+"Không hiện trên thanh tab" = "Not shown on the tab bar";
 "Không lưu được vào Ảnh" = "Could not save to Photos";
 "Không lưu được, hãy cấp quyền Ảnh" = "Could not save, please allow Photos access";
 "Không lấy được phụ đề" = "Could not get subtitles";
@@ -115,7 +119,11 @@
 "Kiểu màu tab" = "Tab color style";
 "Kiểu thanh tab" = "Tab bar style";
 "Kéo nút vào đây" = "Drag a button here";
+"Kéo tab vào đây" = "Drag a tab here";
 "Kênh đăng ký" = "Subscriptions";
+"Kính lỏng bảng chọn" = "Liquid glass sheets";
+"Kính lỏng thanh trên" = "Liquid glass top bar";
+"Kính lỏng trình phát" = "Liquid glass player";
 "Liên kết tại thời điểm này" = "Link at this moment";
 "Liên kết video" = "Video link";
 "Liên kết, tiêu đề, mô tả" = "Link, title, description";
@@ -148,11 +156,14 @@
 "Nhạc" = "Music";
 "Nhấn giữ bình luận" = "Long-press a comment";
 "Nhấn giữ một nút rồi kéo để đổi thứ tự hoặc sang hàng khác. Chạm một nút để chọn, rồi đặt vị trí bằng nút kính ở trên (Tất cả = cả hai hàng). Thứ tự đọc từ trái sang phải: nút cuối cùng nằm sát nút bánh răng (hàng trên) hoặc sát nút toàn màn hình (hàng dưới)." = "Press and hold a button, then drag to reorder it or move it to another row. Tap a button to select it, then set its position with the glass button above (All = both rows). Order reads left to right: the last button sits next to the gear button (top row) or the fullscreen button (bottom row).";
+"Nhấn giữ một tab rồi kéo để đổi thứ tự hoặc chuyển giữa hai dải. Chạm một tab để chọn, rồi ẩn/hiện hoặc đổi tên ở thẻ bên dưới. Thay đổi tab có hiệu lực sau khi mở lại app." = "Press and hold a tab, then drag it to reorder or to move it between the two strips. Tap a tab to select it, then show/hide or rename it in the card below. Tab changes take effect after restarting the app.";
 "Nhập từ tệp" = "Import from file";
 "Nhắc tương tác (like, đăng ký)" = "Interaction reminder (like, subscribe)";
 "No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium. Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app." = "No premium: blocks the popups, suggestion bars and dialogs that invite you to try or buy YouTube Premium. When the build includes NoYTPremium, this switch also turns that part on and off (survey blocking, the trial entry in settings). Requires reopening the app.";
 "Nút lưu khi xem ảnh" = "Save button for images";
+"Nút nổi trên video" = "Floating buttons on the video";
 "Nút trên trình phát" = "Player buttons";
+"Nút tìm kiếm, thông báo, quay lại" = "Search, notifications and back buttons";
 "Nút tải xuống" = "Download button";
 "Phát bằng" = "Play with";
 "Phát lại" = "Playback";
@@ -171,6 +182,7 @@
 "Sao chép dịch: nhấn giữ vào một bình luận để sao chép nội dung, dịch sang ngôn ngữ của thiết bị hoặc dịch rồi sao chép." = "Copy translation: long-press a comment to copy its text, translate it to your device language, or translate and copy.";
 "Sao lưu cài đặt" = "Back up settings";
 "Short phát hết sẽ không lặp lại. Nếu Tắt cuộn Short đang tắt thì tự chuyển sang Short kế tiếp; nếu Tắt cuộn Short đang bật thì dừng lại ở cuối Short." = "A Short that finishes will not loop. If Disable Short scroll is off it moves on to the next Short; if it is on it stops at the end of the Short.";
+"Shorts tràn xuống thanh tab" = "Shorts fill down to the tab bar";
 "Sản phẩm, giỏ hàng" = "Products, cart";
 "TAB ĐANG HIỆN" = "VISIBLE TABS";
 "TAB ĐANG ẨN" = "HIDDEN TABS";
@@ -179,6 +191,7 @@
 "Tab, thứ tự, Liquid Glass" = "Tabs, order, Liquid Glass";
 "Thanh tab" = "Tab bar";
 "Thay nút Tải xuống gốc" = "Replace the original Download button";
+"Thay nền đặc của bảng chọn đáy màn hình, menu ngữ cảnh và hộp thoại bằng kính lỏng. Cần iOS 26 trở lên. Nếu chữ khó đọc hoặc bảng bị lệch, tắt công tắc này." = "Replaces the solid background of bottom sheets, context menus and dialogs with liquid glass. Requires iOS 26 or later. If text is hard to read or a sheet looks misaligned, turn this switch off.";
 "Theo YouTube" = "Follow YouTube";
 "Thiết bị không hỗ trợ PiP" = "This device does not support PiP";
 "Thoát chế độ an toàn" = "Exit safe mode";
@@ -200,6 +213,7 @@
 "Trong 4 giây" = "Within 4 seconds";
 "Trong trình phát" = "In the player";
 "Trên" = "Top";
+"Trên thanh tab, từ trái sang phải" = "On the tab bar, left to right";
 "Trình phát hệ thống" = "System player";
 "Trò chơi" = "Gaming";
 "Trước khi tải video, hỏi lưu vào Ảnh hay mở bảng chia sẻ. Tắt đi sẽ theo tuỳ chọn Mở bảng chia sẻ." = "Before downloading a video, asks whether to save to Photos or open the share sheet. When off, follows the Open share sheet option.";
@@ -307,6 +321,7 @@
 "Đang chuẩn bị" = "Preparing";
 "Đang dịch" = "Translating";
 "Đang ghép tệp" = "Merging files";
+"Đang hiện trên thanh tab" = "Shown on the tab bar";
 "Đang lưu ảnh" = "Saving image";
 "Đang lấy phụ đề" = "Getting subtitles";
 "Đang lấy thông tin" = "Getting info";
@@ -315,6 +330,7 @@
 "Đang tải âm thanh" = "Downloading audio";
 "Đang tải ảnh bìa" = "Downloading cover image";
 "Đang tắt. Chỉ tự bật khi app crash thật; app bị hệ thống tắt không tính." = "Off. Turns on only after a real crash; being killed by the system does not count.";
+"Đang ẩn" = "Hidden";
 "Đoạn kết, credit" = "Outro, credits";
 "Đoạn lan man, ít quan trọng" = "Tangents and low-value filler";
 "Đoạn mở đầu" = "Intro";
@@ -346,13 +362,16 @@
 "Đĩa nhạc góc dưới" = "Music disc, bottom corner";
 "Đưa toàn bộ tuỳ chọn của AutoAC về giá trị mặc định. Cần mở lại app để áp dụng." = "Resets every AutoAC option to its default value. Restart the app to apply.";
 "Đặt lại cài đặt" = "Reset settings";
+"Đặt nền kính lỏng sau cụm nút bên phải của thanh trên (tìm kiếm, thông báo…) và nút nhỏ bên trái như nút quay lại. Cần iOS 26 trở lên. Ý tưởng theo ytkace (MIT)." = "Puts a liquid-glass background behind the right-hand button group of the top bar (search, notifications…) and the small left button such as Back. Requires iOS 26 or later. Idea based on ytkace (MIT).";
 "Để trống để dùng lại tên mặc định." = "Leave empty to use the default name.";
+"Đổi nền mờ của các nút nổi trong trình phát (YTFrostedGlassView) sang kính lỏng. Cần iOS 26 trở lên." = "Turns the blurred backgrounds of the floating player buttons (YTFrostedGlassView) into liquid glass. Requires iOS 26 or later.";
 "Đổi tên tab" = "Rename tab";
 "đang tính…\n" = "calculating…\n";
 "đã gắn" = "attached";
 "Ảnh chưa tải xong" = "Image not finished downloading";
 "Ảnh chụp trạng thái app" = "App state snapshots";
 "Ảnh hoặc bảng chia sẻ" = "Photos or share sheet";
+"Ẩn" = "Hide";
 "Ẩn Remix" = "Hide Remix";
 "Ẩn bài đăng" = "Hide posts";
 "Ẩn bình luận" = "Hide comments";
@@ -384,3 +403,4 @@
 "Ẩn âm thanh" = "Hide sound";
 "ẩn nút Thích, bình luận, chia sẻ, lưu, Remix, âm thanh, thẻ tạm dừng" = "hide Like, Comment, Share, Save, Remix, Sound and pause card";
 "ẩn nút lưu Shorts %@ · tốc độ đã chọn %g\n" = "hide Shorts save button %@ · picked speed %g\n";
+"Ở tab Shorts, nền dưới video và thanh tab trong suốt (không trắng, không đen) và video kéo xuống tận thanh tab như các tab khác. Thử nghiệm: nếu Shorts bị lệch hoặc cuộn giật, tắt công tắc này. Chỉ có tác dụng khi thanh tab ở chế độ kính lỏng." = "On the Shorts tab, the area under the video and the tab bar are transparent (not white, not black) and the video extends down to the tab bar like on the other tabs. Experimental: if Shorts looks misaligned or scrolls with stutter, turn this switch off. Only works when the tab bar is in liquid-glass mode.";
