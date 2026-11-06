@@ -1,5 +1,5 @@
 # version: 2.0.0 | 2026-11-06 | form gọn 11 ô, ký giả/chứng chỉ, repo: tự biên dịch, token none | cần package_engine.py >= 2.0.0
-name: 📦 Đóng gói & Ký (IPA · Cyan · TrollFools · DEB)
+name: Đóng gói & Ký (IPA · Cyan · TrollFools)
 
 # ┌─ CÁCH ĐIỀN FORM (đi từ 1 xuống 6, phần ⚙️ có thể bỏ qua) ─────────────────────
 # │ 1 Tweak   : tên · preset:youmod · repo:Dự_án · link · file:đường_dẫn · none
