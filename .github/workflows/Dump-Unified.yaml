@@ -29,7 +29,7 @@ on:
           - TikTokHeader
           - Khác
       custom_name:
-        description: '✏️ Tên riêng (chỉ khi chọn "Khác")'
+        description: '✏️ Tên riêng (khi chọn "Khác")'
         required: false
         type: string
       target_classes:
