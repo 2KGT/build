@@ -1,3 +1,4 @@
+# version: 2.0.0 | 2026-11-06 | form gọn 11 ô, ký giả/chứng chỉ, repo: tự biên dịch, token none | cần package_engine.py >= 2.0.0
 name: 📦 Đóng gói & Ký (IPA · Cyan · TrollFools · DEB)
 
 # ┌─ CÁCH ĐIỀN FORM (đi từ 1 xuống 6, phần ⚙️ có thể bỏ qua) ─────────────────────
@@ -93,6 +94,8 @@ jobs:
       needs_dpkg: ${{ steps.plan.outputs.needs_dpkg }}
       needs_fastlane: ${{ steps.plan.outputs.needs_fastlane }}
     env:
+      PKG_WORKFLOW_VERSION: '2.0.0'
+      REQUIRES_ENGINE: '2.0.0'      # package_engine.py phải từ bản này trở lên
       TOKENS: ${{ inputs.tweaks }}
       EXCLUDE: ${{ inputs.exclude }}
       IPA_URL: ${{ inputs.ipa_url != '' && 'set' || '' }}   # plan chỉ cần biết có hay chưa
@@ -107,6 +110,20 @@ jobs:
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
+
+      - name: 🧩 Kiểm tra phiên bản tương thích
+        run: |
+          ENGINE_VER=$(sed -n 's/^__version__ = "\(.*\)"/\1/p' .github/scripts/package_engine.py | head -1)
+          if [ -z "$ENGINE_VER" ]; then
+            echo "::error::scripts/package_engine.py chưa có số phiên bản (bản quá cũ). Workflow $PKG_WORKFLOW_VERSION cần engine >= $REQUIRES_ENGINE — hãy thay file này."
+            exit 1
+          fi
+          LOWEST=$(printf '%s\n%s\n' "$REQUIRES_ENGINE" "$ENGINE_VER" | sort -V | head -1)
+          if [ "$LOWEST" != "$REQUIRES_ENGINE" ]; then
+            echo "::error::package_engine.py $ENGINE_VER quá cũ. Workflow $PKG_WORKFLOW_VERSION cần >= $REQUIRES_ENGINE — hãy thay file này."
+            exit 1
+          fi
+          echo "✅ Workflow $PKG_WORKFLOW_VERSION · engine $ENGINE_VER (cần >= $REQUIRES_ENGINE)"
 
       - name: 🗺️ Mở rộng & kiểm tra (package_engine.py plan)
         id: plan
