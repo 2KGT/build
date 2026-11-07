@@ -13,7 +13,6 @@
 "Bật thu gọn" = "Minimize bar";
 "Bật tự bỏ qua" = "Auto skip";
 "Bộ nhớ" = "Storage";
-"CHUNG" = "GENERAL";
 "CHẨN ĐOÁN HỆ THỐNG" = "SYSTEM DIAGNOSTICS";
 "CHẾ ĐỘ AN TOÀN" = "SAFE MODE";
 "CHỨC NĂNG CHÍNH\n" = "MAIN FEATURES\n";
@@ -22,14 +21,16 @@
 "Chú thích các chức năng" = "Feature notes";
 "Chưa cài Infuse" = "Infuse not installed";
 "Chưa cài VLC" = "VLC not installed";
+"Chưa có danh sách chất lượng" = "No quality list yet";
 "Chưa nhận diện được video" = "Video not recognized";
+"Chưa xác định được video" = "Could not identify the video";
 "Chạm lần nữa để khôi phục Overlay" = "Tap again to restore the overlay";
 "Chạm lần nữa để khôi phục tab" = "Tap again to restore tabs";
 "Chạm lần nữa để đặt lại" = "Tap again to reset";
 "Chạm nút Tải xuống gốc của YouTube (hàng nút dưới video) sẽ mở bảng tải của AutoAC thay cho bảng của YouTube. Có thể bật cùng Nút icon tải khi cần." = "Tapping YouTube's own Download button (the row under the video) opens the AutoAC download sheet instead of YouTube's. Can be combined with the Download icon button.";
+"Chất lượng" = "Quality";
 "Chất lượng video" = "Video quality";
-"Chặn Music Premium" = "Block Music Premium";
-"Chặn popup mời mua Premium" = "Block Premium upsell popups";
+"Chặn popup và thẻ mời Premium" = "Block Premium popups and upsell cards";
 "Chặn quảng cáo" = "Block ads";
 "Chặn quảng cáo trong video, trang chủ và Shorts (YouTube X). Cần mở lại app." = "Blocks ads in videos, the home feed and Shorts (YouTube X). Restart the app to apply.";
 "Chỉ chữ" = "Text only";
@@ -77,6 +78,7 @@
 "Hàng trên, hàng dưới, thứ tự" = "Top row, bottom row, order";
 "Hàng đợi" = "Queue";
 "Hãy mở một video trước" = "Open a video first";
+"Hãy thử lại khi video đã phát" = "Try again once the video is playing";
 "Hãy đóng và mở lại YouTube" = "Close and reopen YouTube";
 "Hẹn giờ" = "Timer";
 "Hết video" = "Video ended";
@@ -113,6 +115,7 @@
 "Không tự phát khi mở video" = "No autoplay when opening a video";
 "Không tự sang Short kế" = "Do not auto-advance to the next Short";
 "Không đọc được bình luận" = "Could not read comments";
+"Không đổi được chất lượng" = "Could not change quality";
 "Khỏi trang chủ" = "Off the home feed";
 "Kiểm tra kết nối mạng" = "Check your network connection";
 "Kiểu màu" = "Color";
@@ -135,6 +138,7 @@
 "Lưu vào Ảnh" = "Save to Photos";
 "Lưu ảnh bài đăng" = "Save post images";
 "Lưu ảnh bìa" = "Save cover image";
+"Lặp video" = "Loop video";
 "Lịch sử" = "History";
 "MÃ NGUỒN THAM KHẢO\n" = "REFERENCE SOURCES\n";
 "Màn hình kết, credit" = "End cards and credits";
@@ -159,7 +163,7 @@
 "Nhấn giữ một tab rồi kéo để đổi thứ tự hoặc chuyển giữa hai dải. Chạm một tab để chọn, rồi ẩn/hiện hoặc đổi tên ở thẻ bên dưới. Thay đổi tab có hiệu lực sau khi mở lại app." = "Press and hold a tab, then drag it to reorder or to move it between the two strips. Tap a tab to select it, then show/hide or rename it in the card below. Tab changes take effect after restarting the app.";
 "Nhập từ tệp" = "Import from file";
 "Nhắc tương tác (like, đăng ký)" = "Interaction reminder (like, subscribe)";
-"No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium. Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app." = "No premium: blocks the popups, suggestion bars and dialogs that invite you to try or buy YouTube Premium. When the build includes NoYTPremium, this switch also turns that part on and off (survey blocking, the trial entry in settings). Requires reopening the app.";
+"No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium, đồng thời gỡ khỏi bảng tin các thẻ mời dùng thử hoặc mua YouTube Music Premium (không để lại khoảng trống). Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app." = "No premium: blocks the popups, suggestion bars and dialogs that invite you to try or buy YouTube Premium, and also removes cards inviting you to try or buy YouTube Music Premium from the feed (leaving no gap). When the build includes NoYTPremium, this switch also turns that part on and off (survey blocking, the trial entry in settings). Requires restarting the app.";
 "Nút lưu khi xem ảnh" = "Save button for images";
 "Nút nổi trên video" = "Floating buttons on the video";
 "Nút trên trình phát" = "Player buttons";
@@ -189,9 +193,7 @@
 "Tab hiện khi mở app" = "Tab shown at launch";
 "Tab khi mở app" = "Tab at launch";
 "Tab, thứ tự, Liquid Glass" = "Tabs, order, Liquid Glass";
-"Thanh tab" = "Tab bar";
 "Thay nút Tải xuống gốc" = "Replace the original Download button";
-"Thay nền đặc của bảng chọn đáy màn hình, menu ngữ cảnh và hộp thoại bằng kính lỏng. Cần iOS 26 trở lên. Nếu chữ khó đọc hoặc bảng bị lệch, tắt công tắc này." = "Replaces the solid background of bottom sheets, context menus and dialogs with liquid glass. Requires iOS 26 or later. If text is hard to read or a sheet looks misaligned, turn this switch off.";
 "Theo YouTube" = "Follow YouTube";
 "Thiết bị không hỗ trợ PiP" = "This device does not support PiP";
 "Thoát chế độ an toàn" = "Exit safe mode";
@@ -199,7 +201,6 @@
 "Thông báo" = "Notifications";
 "Thông tin" = "Info";
 "Thư mục nào đang chiếm bộ nhớ" = "Which folders use the space";
-"Thẻ mời dùng thử trong bảng tin" = "Trial banners in the feed";
 "Thẻ đề xuất trong bảng tin" = "Suggestion cards in the feed";
 "Thể thao" = "Sports";
 "Thời trang" = "Fashion";
@@ -337,6 +338,7 @@
 "Đoạn mở đầu lặp lại" = "Repeated opening segment";
 "Đoạn nói trong video nhạc" = "Talking in music videos";
 "Đoạn thừa" = "Filler";
+"Đã bật lặp video" = "Loop on";
 "Đã bỏ qua" = "Skipped";
 "Đã dịch và sao chép" = "Translated and copied";
 "Đã dọn %@" = "Cleaned %@";
@@ -359,12 +361,11 @@
 "Đã tạm dừng" = "Paused";
 "Đã tải xong" = "Download complete";
 "Đã tắt hẹn giờ" = "Timer turned off";
+"Đã tắt lặp video" = "Loop off";
 "Đĩa nhạc góc dưới" = "Music disc, bottom corner";
 "Đưa toàn bộ tuỳ chọn của AutoAC về giá trị mặc định. Cần mở lại app để áp dụng." = "Resets every AutoAC option to its default value. Restart the app to apply.";
 "Đặt lại cài đặt" = "Reset settings";
-"Đặt nền kính lỏng sau cụm nút bên phải của thanh trên (tìm kiếm, thông báo…) và nút nhỏ bên trái như nút quay lại. Cần iOS 26 trở lên. Ý tưởng theo ytkace (MIT)." = "Puts a liquid-glass background behind the right-hand button group of the top bar (search, notifications…) and the small left button such as Back. Requires iOS 26 or later. Idea based on ytkace (MIT).";
 "Để trống để dùng lại tên mặc định." = "Leave empty to use the default name.";
-"Đổi nền mờ của các nút nổi trong trình phát (YTFrostedGlassView) sang kính lỏng. Cần iOS 26 trở lên." = "Turns the blurred backgrounds of the floating player buttons (YTFrostedGlassView) into liquid glass. Requires iOS 26 or later.";
 "Đổi tên tab" = "Rename tab";
 "đang tính…\n" = "calculating…\n";
 "đã gắn" = "attached";
@@ -395,7 +396,6 @@
 "Ẩn nút âm thanh (đĩa nhạc) trong Shorts." = "Hides the sound button (music disc) in Shorts.";
 "Ẩn thẻ gợi ý (nudge) và Mix trong bảng tin. Cần mở lại app." = "Hides suggestion cards (nudges) and Mix in the feed. Restart the app to apply.";
 "Ẩn thẻ gợi ý hiện ra khi bạn chạm để dừng một Short." = "Hides the suggestion card that appears when you tap to pause a Short.";
-"Ẩn thẻ mời dùng thử hoặc mua YouTube Music Premium (và các thẻ mời nâng cấp tương tự) hiện giữa bảng tin. Thẻ được gỡ khỏi danh sách nên không để lại khoảng trống. Cần mở lại app. Popup mời mua Premium do công tắc No premium lo." = "Hides cards inviting you to try or buy YouTube Music Premium (and similar upgrade cards) shown in the feed. Cards are removed from the list, so no gap is left. Requires restarting the app. Premium purchase popups are handled by the No premium switch.";
 "Ẩn thẻ sản phẩm" = "Hide product tags";
 "Ẩn thẻ sản phẩm và giỏ hàng gắn trên Short. Chỉ tác động lên lớp phủ của Short đang xem, không quét trang chủ hay danh sách nên không gây trắng trang hay lag." = "Hides product tags and carts attached to a Short. Only affects the overlay of the Short being watched; it never scans the home feed or lists, so it cannot cause blank pages or lag.";
 "Ẩn thẻ tạm dừng" = "Hide pause card";
@@ -403,4 +403,3 @@
 "Ẩn âm thanh" = "Hide sound";
 "ẩn nút Thích, bình luận, chia sẻ, lưu, Remix, âm thanh, thẻ tạm dừng" = "hide Like, Comment, Share, Save, Remix, Sound and pause card";
 "ẩn nút lưu Shorts %@ · tốc độ đã chọn %g\n" = "hide Shorts save button %@ · picked speed %g\n";
-"Ở tab Shorts, nền dưới video và thanh tab trong suốt (không trắng, không đen) và video kéo xuống tận thanh tab như các tab khác. Thử nghiệm: nếu Shorts bị lệch hoặc cuộn giật, tắt công tắc này. Chỉ có tác dụng khi thanh tab ở chế độ kính lỏng." = "On the Shorts tab, the area under the video and the tab bar are transparent (not white, not black) and the video extends down to the tab bar like on the other tabs. Experimental: if Shorts looks misaligned or scrolls with stutter, turn this switch off. Only works when the tab bar is in liquid-glass mode.";
