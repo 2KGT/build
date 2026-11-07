@@ -4038,13 +4038,23 @@ static void ACGHideCreateViews(UIView *view) {
     }
 }
 
-static NSString * const ACGTabBarGlassModeKey = @"ACG.Preference.Tabs.GlassMode";
+static NSString * const ACGTabBarGlassModeKey __attribute__((unused)) = @"ACG.Preference.Tabs.GlassMode";
+
+// TẠM TẮT kính lỏng của thanh tab: 0 = tắt hẳn (mọi nhánh kiểu Glass / ép kính YouTube / thu gọn / Shorts tràn đều không chạy,
+// thanh tab giữ nguyên giao diện mặc định của YouTube, bỏ qua giá trị đã lưu). Đổi thành 1 để bật lại như trước.
+#ifndef ACG_TAB_GLASS_ENABLED
+#define ACG_TAB_GLASS_ENABLED 0
+#endif
 
 NSInteger ACGTabBarGlassMode(void) {
+#if !ACG_TAB_GLASS_ENABLED
+    return 0;
+#else
     NSUserDefaults *defaults = NSUserDefaults.standardUserDefaults;
     id value = [defaults objectForKey:ACGTabBarGlassModeKey];
     if ([value respondsToSelector:@selector(integerValue)]) return [value integerValue];
     return [defaults boolForKey:@"ACG.Preference.Tabs.Glass"] ? 1 : 0;
+#endif
 }
 
 BOOL ACGTabBarOwnGlass(void) {
@@ -7811,6 +7821,7 @@ static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString 
 
     // ── Nhóm kính lỏng ──
     if (liquid) {
+#if ACG_TAB_GLASS_ENABLED
         UIView *glassPill = ACGValueMenu(ACGTabBarGlassMode() == 1 ? @"Glass" : AutoACT(@"Mặc định"), @[AutoACT(@"Mặc định"), @"Glass"],
                                          ACGTabBarGlassMode() == 1 ? 1 : 0, ^(NSUInteger pick) {
             ACGSetPreferenceObject(@"ACG.Preference.Tabs.GlassMode", @(pick));
@@ -7821,6 +7832,7 @@ static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString 
         [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Kiểu thanh tab") detail:AutoACT(@"Mặc định hoặc Glass") accessory:glassPill tap:nil]];
         [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Bật thu gọn") detail:AutoACT(@"Thu nhỏ khi cuộn")
             accessory:[self switchForKey:@"ACG.Preference.Tabs.GlassMinimize" on:[ACGPreferenceObject(@"ACG.Preference.Tabs.GlassMinimize") boolValue]] tap:nil]];
+#endif
         [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Kính lỏng thanh trên") detail:AutoACT(@"Nút tìm kiếm, thông báo, quay lại")
             accessory:[self switchForKey:kGlassTopKey on:[kPrefs boolForKey:kGlassTopKey]] tap:nil]];
         [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Kính lỏng bảng chọn") detail:AutoACT(@"Bảng, menu và hộp thoại")
@@ -7828,8 +7840,10 @@ static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString 
         [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Kính lỏng trình phát") detail:AutoACT(@"Nút nổi trên video")
             accessory:[self switchForKey:kGlassPlayerKey on:[kPrefs boolForKey:kGlassPlayerKey]] tap:nil]];
     }
+#if ACG_TAB_GLASS_ENABLED
     [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Shorts tràn xuống thanh tab") detail:AutoACT(@"Dock trong suốt, không dải trắng/đen")
         accessory:[self switchForKey:kShortsFullBleedKey on:[kPrefs boolForKey:kShortsFullBleedKey]] tap:nil]];
+#endif
 
     // ── Nhãn, màu, tab khi mở app ──
     [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Bật nhãn") detail:AutoACT(@"Hiện tên dưới icon")
