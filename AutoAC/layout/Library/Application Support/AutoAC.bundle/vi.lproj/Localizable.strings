@@ -13,7 +13,6 @@
 "Bật thu gọn" = "Bật thu gọn";
 "Bật tự bỏ qua" = "Bật tự bỏ qua";
 "Bộ nhớ" = "Bộ nhớ";
-"CHUNG" = "CHUNG";
 "CHẨN ĐOÁN HỆ THỐNG" = "CHẨN ĐOÁN HỆ THỐNG";
 "CHẾ ĐỘ AN TOÀN" = "CHẾ ĐỘ AN TOÀN";
 "CHỨC NĂNG CHÍNH\n" = "CHỨC NĂNG CHÍNH\n";
@@ -22,14 +21,16 @@
 "Chú thích các chức năng" = "Chú thích các chức năng";
 "Chưa cài Infuse" = "Chưa cài Infuse";
 "Chưa cài VLC" = "Chưa cài VLC";
+"Chưa có danh sách chất lượng" = "Chưa có danh sách chất lượng";
 "Chưa nhận diện được video" = "Chưa nhận diện được video";
+"Chưa xác định được video" = "Chưa xác định được video";
 "Chạm lần nữa để khôi phục Overlay" = "Chạm lần nữa để khôi phục Overlay";
 "Chạm lần nữa để khôi phục tab" = "Chạm lần nữa để khôi phục tab";
 "Chạm lần nữa để đặt lại" = "Chạm lần nữa để đặt lại";
 "Chạm nút Tải xuống gốc của YouTube (hàng nút dưới video) sẽ mở bảng tải của AutoAC thay cho bảng của YouTube. Có thể bật cùng Nút icon tải khi cần." = "Chạm nút Tải xuống gốc của YouTube (hàng nút dưới video) sẽ mở bảng tải của AutoAC thay cho bảng của YouTube. Có thể bật cùng Nút icon tải khi cần.";
+"Chất lượng" = "Chất lượng";
 "Chất lượng video" = "Chất lượng video";
-"Chặn Music Premium" = "Chặn Music Premium";
-"Chặn popup mời mua Premium" = "Chặn popup mời mua Premium";
+"Chặn popup và thẻ mời Premium" = "Chặn popup và thẻ mời Premium";
 "Chặn quảng cáo" = "Chặn quảng cáo";
 "Chặn quảng cáo trong video, trang chủ và Shorts (YouTube X). Cần mở lại app." = "Chặn quảng cáo trong video, trang chủ và Shorts (YouTube X). Cần mở lại app.";
 "Chỉ chữ" = "Chỉ chữ";
@@ -77,6 +78,7 @@
 "Hàng trên, hàng dưới, thứ tự" = "Hàng trên, hàng dưới, thứ tự";
 "Hàng đợi" = "Hàng đợi";
 "Hãy mở một video trước" = "Hãy mở một video trước";
+"Hãy thử lại khi video đã phát" = "Hãy thử lại khi video đã phát";
 "Hãy đóng và mở lại YouTube" = "Hãy đóng và mở lại YouTube";
 "Hẹn giờ" = "Hẹn giờ";
 "Hết video" = "Hết video";
@@ -113,6 +115,7 @@
 "Không tự phát khi mở video" = "Không tự phát khi mở video";
 "Không tự sang Short kế" = "Không tự sang Short kế";
 "Không đọc được bình luận" = "Không đọc được bình luận";
+"Không đổi được chất lượng" = "Không đổi được chất lượng";
 "Khỏi trang chủ" = "Khỏi trang chủ";
 "Kiểm tra kết nối mạng" = "Kiểm tra kết nối mạng";
 "Kiểu màu" = "Kiểu màu";
@@ -135,6 +138,7 @@
 "Lưu vào Ảnh" = "Lưu vào Ảnh";
 "Lưu ảnh bài đăng" = "Lưu ảnh bài đăng";
 "Lưu ảnh bìa" = "Lưu ảnh bìa";
+"Lặp video" = "Lặp video";
 "Lịch sử" = "Lịch sử";
 "MÃ NGUỒN THAM KHẢO\n" = "MÃ NGUỒN THAM KHẢO\n";
 "Màn hình kết, credit" = "Màn hình kết, credit";
@@ -159,7 +163,7 @@
 "Nhấn giữ một tab rồi kéo để đổi thứ tự hoặc chuyển giữa hai dải. Chạm một tab để chọn, rồi ẩn/hiện hoặc đổi tên ở thẻ bên dưới. Thay đổi tab có hiệu lực sau khi mở lại app." = "Nhấn giữ một tab rồi kéo để đổi thứ tự hoặc chuyển giữa hai dải. Chạm một tab để chọn, rồi ẩn/hiện hoặc đổi tên ở thẻ bên dưới. Thay đổi tab có hiệu lực sau khi mở lại app.";
 "Nhập từ tệp" = "Nhập từ tệp";
 "Nhắc tương tác (like, đăng ký)" = "Nhắc tương tác (like, đăng ký)";
-"No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium. Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app." = "No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium. Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app.";
+"No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium, đồng thời gỡ khỏi bảng tin các thẻ mời dùng thử hoặc mua YouTube Music Premium (không để lại khoảng trống). Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app." = "No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium, đồng thời gỡ khỏi bảng tin các thẻ mời dùng thử hoặc mua YouTube Music Premium (không để lại khoảng trống). Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app.";
 "Nút lưu khi xem ảnh" = "Nút lưu khi xem ảnh";
 "Nút nổi trên video" = "Nút nổi trên video";
 "Nút trên trình phát" = "Nút trên trình phát";
@@ -189,9 +193,7 @@
 "Tab hiện khi mở app" = "Tab hiện khi mở app";
 "Tab khi mở app" = "Tab khi mở app";
 "Tab, thứ tự, Liquid Glass" = "Tab, thứ tự, Liquid Glass";
-"Thanh tab" = "Thanh tab";
 "Thay nút Tải xuống gốc" = "Thay nút Tải xuống gốc";
-"Thay nền đặc của bảng chọn đáy màn hình, menu ngữ cảnh và hộp thoại bằng kính lỏng. Cần iOS 26 trở lên. Nếu chữ khó đọc hoặc bảng bị lệch, tắt công tắc này." = "Thay nền đặc của bảng chọn đáy màn hình, menu ngữ cảnh và hộp thoại bằng kính lỏng. Cần iOS 26 trở lên. Nếu chữ khó đọc hoặc bảng bị lệch, tắt công tắc này.";
 "Theo YouTube" = "Theo YouTube";
 "Thiết bị không hỗ trợ PiP" = "Thiết bị không hỗ trợ PiP";
 "Thoát chế độ an toàn" = "Thoát chế độ an toàn";
@@ -199,7 +201,6 @@
 "Thông báo" = "Thông báo";
 "Thông tin" = "Thông tin";
 "Thư mục nào đang chiếm bộ nhớ" = "Thư mục nào đang chiếm bộ nhớ";
-"Thẻ mời dùng thử trong bảng tin" = "Thẻ mời dùng thử trong bảng tin";
 "Thẻ đề xuất trong bảng tin" = "Thẻ đề xuất trong bảng tin";
 "Thể thao" = "Thể thao";
 "Thời trang" = "Thời trang";
@@ -337,6 +338,7 @@
 "Đoạn mở đầu lặp lại" = "Đoạn mở đầu lặp lại";
 "Đoạn nói trong video nhạc" = "Đoạn nói trong video nhạc";
 "Đoạn thừa" = "Đoạn thừa";
+"Đã bật lặp video" = "Đã bật lặp video";
 "Đã bỏ qua" = "Đã bỏ qua";
 "Đã dịch và sao chép" = "Đã dịch và sao chép";
 "Đã dọn %@" = "Đã dọn %@";
@@ -359,12 +361,11 @@
 "Đã tạm dừng" = "Đã tạm dừng";
 "Đã tải xong" = "Đã tải xong";
 "Đã tắt hẹn giờ" = "Đã tắt hẹn giờ";
+"Đã tắt lặp video" = "Đã tắt lặp video";
 "Đĩa nhạc góc dưới" = "Đĩa nhạc góc dưới";
 "Đưa toàn bộ tuỳ chọn của AutoAC về giá trị mặc định. Cần mở lại app để áp dụng." = "Đưa toàn bộ tuỳ chọn của AutoAC về giá trị mặc định. Cần mở lại app để áp dụng.";
 "Đặt lại cài đặt" = "Đặt lại cài đặt";
-"Đặt nền kính lỏng sau cụm nút bên phải của thanh trên (tìm kiếm, thông báo…) và nút nhỏ bên trái như nút quay lại. Cần iOS 26 trở lên. Ý tưởng theo ytkace (MIT)." = "Đặt nền kính lỏng sau cụm nút bên phải của thanh trên (tìm kiếm, thông báo…) và nút nhỏ bên trái như nút quay lại. Cần iOS 26 trở lên. Ý tưởng theo ytkace (MIT).";
 "Để trống để dùng lại tên mặc định." = "Để trống để dùng lại tên mặc định.";
-"Đổi nền mờ của các nút nổi trong trình phát (YTFrostedGlassView) sang kính lỏng. Cần iOS 26 trở lên." = "Đổi nền mờ của các nút nổi trong trình phát (YTFrostedGlassView) sang kính lỏng. Cần iOS 26 trở lên.";
 "Đổi tên tab" = "Đổi tên tab";
 "đang tính…\n" = "đang tính…\n";
 "đã gắn" = "đã gắn";
@@ -395,7 +396,6 @@
 "Ẩn nút âm thanh (đĩa nhạc) trong Shorts." = "Ẩn nút âm thanh (đĩa nhạc) trong Shorts.";
 "Ẩn thẻ gợi ý (nudge) và Mix trong bảng tin. Cần mở lại app." = "Ẩn thẻ gợi ý (nudge) và Mix trong bảng tin. Cần mở lại app.";
 "Ẩn thẻ gợi ý hiện ra khi bạn chạm để dừng một Short." = "Ẩn thẻ gợi ý hiện ra khi bạn chạm để dừng một Short.";
-"Ẩn thẻ mời dùng thử hoặc mua YouTube Music Premium (và các thẻ mời nâng cấp tương tự) hiện giữa bảng tin. Thẻ được gỡ khỏi danh sách nên không để lại khoảng trống. Cần mở lại app. Popup mời mua Premium do công tắc No premium lo." = "Ẩn thẻ mời dùng thử hoặc mua YouTube Music Premium (và các thẻ mời nâng cấp tương tự) hiện giữa bảng tin. Thẻ được gỡ khỏi danh sách nên không để lại khoảng trống. Cần mở lại app. Popup mời mua Premium do công tắc No premium lo.";
 "Ẩn thẻ sản phẩm" = "Ẩn thẻ sản phẩm";
 "Ẩn thẻ sản phẩm và giỏ hàng gắn trên Short. Chỉ tác động lên lớp phủ của Short đang xem, không quét trang chủ hay danh sách nên không gây trắng trang hay lag." = "Ẩn thẻ sản phẩm và giỏ hàng gắn trên Short. Chỉ tác động lên lớp phủ của Short đang xem, không quét trang chủ hay danh sách nên không gây trắng trang hay lag.";
 "Ẩn thẻ tạm dừng" = "Ẩn thẻ tạm dừng";
@@ -403,4 +403,3 @@
 "Ẩn âm thanh" = "Ẩn âm thanh";
 "ẩn nút Thích, bình luận, chia sẻ, lưu, Remix, âm thanh, thẻ tạm dừng" = "ẩn nút Thích, bình luận, chia sẻ, lưu, Remix, âm thanh, thẻ tạm dừng";
 "ẩn nút lưu Shorts %@ · tốc độ đã chọn %g\n" = "ẩn nút lưu Shorts %@ · tốc độ đã chọn %g\n";
-"Ở tab Shorts, nền dưới video và thanh tab trong suốt (không trắng, không đen) và video kéo xuống tận thanh tab như các tab khác. Thử nghiệm: nếu Shorts bị lệch hoặc cuộn giật, tắt công tắc này. Chỉ có tác dụng khi thanh tab ở chế độ kính lỏng." = "Ở tab Shorts, nền dưới video và thanh tab trong suốt (không trắng, không đen) và video kéo xuống tận thanh tab như các tab khác. Thử nghiệm: nếu Shorts bị lệch hoặc cuộn giật, tắt công tắc này. Chỉ có tác dụng khi thanh tab ở chế độ kính lỏng.";
