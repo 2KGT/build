@@ -9943,7 +9943,10 @@ static void AutoACInstallShortsShelfHooks(void) {
                 fBanner = [kPrefs boolForKey:kHidePromosKey];
                 at = now;
             }
-            if (!(fShelf || fPost || fMix || fGame || fBanner) || !gListFilterAllowed || (gShortsOnScreenAt > 0 && now - gShortsOnScreenAt < 2.5))
+            // Chưa đọc được tab hiện tại (gListTabIdent rỗng): vẫn cho ẩn hàng Short như nhánh cellForItemAtIndexPath bên dưới,
+            // còn bài đăng/Mix/game/banner thì không lọc để khỏi để lại khoảng trắng
+            BOOL shelfOnlyScope = !gListFilterAllowed && fShelf && gListTabIdent.length == 0;
+            if (!(fShelf || fPost || fMix || fGame || fBanner) || !(gListFilterAllowed || shelfOnlyScope) || (gShortsOnScreenAt > 0 && now - gShortsOnScreenAt < 2.5))
                 return ((id (*)(id, SEL))original)(self_, selector);
             static const void *kVerdictKey = &kVerdictKey;
             NSNumber *verdict = objc_getAssociatedObject(self_, kVerdictKey);   // 0 giữ, 2 hàng Short, 3 bài đăng, 4 Mix, 5 game
@@ -9962,6 +9965,7 @@ static void AutoACInstallShortsShelfHooks(void) {
                 verdict = @(v);
                 objc_setAssociatedObject(self_, kVerdictKey, verdict, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             }
+            if (shelfOnlyScope && verdict.integerValue != 2) return ((id (*)(id, SEL))original)(self_, selector);
             switch (verdict.integerValue) {
                 case 2: if (fShelf) { gDropShelf++; return nil; } break;
                 case 3: if (fPost) { gDropPost++; return nil; } break;
@@ -12075,7 +12079,7 @@ static void AutoACInstallFeatureHooks(void) {
     }
     [kPrefs registerDefaults:@{kAutoClearCacheKey: @YES, kYTXAdsKey: @YES, kYTXBackgroundKey: @YES,
                                                               kAskQualityKey: @YES, kShareAfterKey: @YES,
-                               kAskDestKey: @YES, kHidePromosKey: @YES, kHidePaidPromoKey: @YES, kShortsFullBleedKey: @YES, kGlassTopKey: @YES, kGlassSheetKey: @YES, kGlassPlayerKey: @YES, kSponsorAlertKey: @YES,
+                               kAskDestKey: @YES, kHidePromosKey: @YES, kHidePaidPromoKey: @YES, kShortsFullBleedKey: @YES, kGlassTopKey: @NO, kGlassSheetKey: @NO, kGlassPlayerKey: @NO, kSponsorAlertKey: @YES,
                                kDiagKey: @YES, kPlayerButtonKey: @YES, kCommentToolsKey: @YES, kPostImageKey: @YES, kPlayerFloatKey: @YES, kPlayerSpeedBtnKey: @YES, kPlayerPiPKey: @YES, kPlayerSleepBtnKey: @YES, kPlayerExternalKey: @YES, kShortsNoLoopKey: @YES}];
     [kPrefs removeObjectForKey:@"ACG.Preference.Tabs.ShortsDarkOff"];   // 2.1.66-2.1.68: công tắc Dock tối ở Short đã bỏ
     AutoACOverlayMigrateLegacy();   // 2.1.64: hai công tắc hàng trên/hàng dưới → Tuỳ chỉnh Overlay
