@@ -20,7 +20,7 @@
 #import "BuildInfo.h"
 #endif
 #ifndef TWEAK_BUILD_VERSION
-#define TWEAK_BUILD_VERSION @"2.1.70"
+#define TWEAK_BUILD_VERSION @"2.1.71"
 #endif
 #ifndef TWEAK_UPSTREAM_COUNT
 #define TWEAK_UPSTREAM_COUNT 0
@@ -51,6 +51,7 @@ static NSInteger gAdvSeen = 0, gAdvBlocked = 0, gAdvTickArmed = 0;
 static BOOL gListFilterAllowed = YES;   // tab hiện tại có được lọc danh sách không (chỉ Trang chủ)
 static CFTimeInterval gListScopeLockUntil = 0;   // vừa đổi tab: giữ kết quả của chính lần đổi tab, chưa cho quét lại
 static NSString *gListTabIdent = nil;
+static NSInteger gFeedCellsSeen = 0;   // số ô bảng tin đã duyệt qua (hiện ở Chẩn đoán để biết bộ lọc có chạy không)
 static NSInteger gDropShelf = 0, gDropPost = 0, gDropMix = 0, gDropGame = 0, gDropBanner = 0;   // số mục đã bỏ khỏi danh sách (hiện ở Chẩn đoán)
 static NSString *gAdvLast = nil;
 static NSMutableOrderedSet<NSString *> *gReelSeen = nil;   // mã · nhãn các nút cột phải của Shorts (hiện ở trang "i" để chẩn đoán)
@@ -61,7 +62,7 @@ typedef id (^AutoACHookMaker)(IMP original, SEL selector);
 static BOOL AutoACHook(NSString *className, NSString *selectorName, BOOL classMethod,
                        const char *prefix, AutoACHookMaker maker);
 
-static NSString *const kCurrentBuildID = @"2.1.70";
+static NSString *const kCurrentBuildID = @"2.1.71";
 
 // ── Nhật ký lỗi: ghi dấu vết và nguyên nhân crash vào Documents/AutoAC_crash.log ──
 static int gTraceFD = -1;
@@ -149,7 +150,6 @@ static NSString *const kShortsFullBleedKey = @"kShortsFullBleed";   // Shorts: d
 static NSString *const kGlassTopKey = @"kGlassTop";         // kính lỏng cho thanh trên (nút tìm kiếm/thông báo, nút quay lại)
 static NSString *const kGlassSheetKey = @"kGlassSheet";     // kính lỏng cho bảng chọn, hộp thoại
 static NSString *const kGlassPlayerKey = @"kGlassPlayer";   // kính lỏng cho các nền mờ của trình phát
-static NSString *const kHideMusicPremiumKey = @"kHideMusicPremium";   // ẩn thẻ mời dùng thử / mua YouTube Music Premium trong bảng tin
 static NSString *const kHidePaidPromoKey = @"kHidePaidPromo";   // ẩn nhãn "Có quảng cáo trả phí" trên trình phát
 static NSString *const kZoomFreeKey = @"kZoomUnlimited";        // phóng to video tự do bằng 2 ngón
 static NSString *const kNoLaunchAnimKey = @"kNoLaunchAnim";     // bỏ hoạt ảnh logo khi mở app
@@ -180,6 +180,8 @@ static NSString *const kPlayerFloatKey = @"kPlayerFloatBtn";    // nút tải b�
 static NSString *const kPlayerPiPKey = @"kPlayerPiPBtn";         // nút PiP trong trình phát
 static NSString *const kPlayerSleepBtnKey = @"kPlayerSleepBtn";   // nút hẹn giờ ngủ trong trình phát
 static NSString *const kPlayerExternalKey = @"kPlayerExternalBtn";   // nút phát bằng trình phát ngoài trong trình phát
+static NSString *const kPlayerQualityKey = @"kPlayerQualityBtn";   // nút chọn chất lượng video trong trình phát (mặc định tắt: kéo vào ở Tuỳ chỉnh Overlay)
+static NSString *const kPlayerLoopKey = @"kPlayerLoopBtn";         // nút lặp video trong trình phát (mặc định tắt)
 static NSString *const kOverlayTopKey = @"kOverlayTop";         // Tuỳ chỉnh Overlay: mã các nút ở hàng trên (dưới nút bánh răng), thứ tự trái → phải
 static NSString *const kOverlayBottomKey = @"kOverlayBottom";   // Tuỳ chỉnh Overlay: mã các nút ở hàng dưới (cạnh nút toàn màn hình), thứ tự trái → phải
 static NSString *const kPlayerButtonKey = @"kPlayerButton";     // nút AutoAC ngay trên trình phát
@@ -2559,10 +2561,10 @@ static NSArray<NSString *> *AutoACAllPrefKeys(void) {
     NSMutableArray<NSString *> *collapsed = [NSMutableArray array];
     for (NSString *k in kPrefs.dictionaryRepresentation.allKeys) if ([k hasPrefix:@"kCollapsed."]) [collapsed addObject:k];
     return [collapsed arrayByAddingObjectsFromArray:@[kAutoClearCacheKey, kHideShortsKey, kYTXAdsKey, kYTXBackgroundKey, kLoopKey, kAutoplayOffKey, kAskQualityKey, kShareAfterKey,
-             kAskDestKey, kHidePromosKey, kHidePaidPromoKey, kHideMusicPremiumKey, kShortsFullBleedKey, kGlassTopKey, kGlassSheetKey, kGlassPlayerKey, kZoomFreeKey, kNoLaunchAnimKey, kOpenPausedKey, kStartRateKey, kDoubleTapKey,
+             kAskDestKey, kHidePromosKey, kHidePaidPromoKey, kShortsFullBleedKey, kGlassTopKey, kGlassSheetKey, kGlassPlayerKey, kZoomFreeKey, kNoLaunchAnimKey, kOpenPausedKey, kStartRateKey, kDoubleTapKey,
              kShortsLikeKey, kShortsCommentKey, kShortsShareKey, kShortsSaveKey, kShortsRemixKey, kShortsSoundKey,
              kShortsPauseCardKey, kHideCommunityKey, kHideMixesKey, kHideGamesKey, kHideShopTagKey, kHideShortsShelfKey, kSponsorKey, kSponsorCatsKey, kSponsorAlertKey,
-             kPlayerButtonKey, kCommentToolsKey, kPostImageKey, kPlayerFloatKey, kShortsNoScrollKey, kShortsNoLoopKey, kPlayFixKey, kNoAutoplayKey, kPlayerSpeedBtnKey, kPlayerPiPKey, kPlayerSleepBtnKey, kPlayerExternalKey, kOverlayTopKey, kOverlayBottomKey]];
+             kPlayerButtonKey, kCommentToolsKey, kPostImageKey, kPlayerFloatKey, kShortsNoScrollKey, kShortsNoLoopKey, kPlayFixKey, kNoAutoplayKey, kPlayerSpeedBtnKey, kPlayerPiPKey, kPlayerSleepBtnKey, kPlayerExternalKey, kPlayerQualityKey, kPlayerLoopKey, kOverlayTopKey, kOverlayBottomKey]];
 }
 
 static void AutoACRestartHint(void) {
@@ -3080,17 +3082,33 @@ static NSInteger ACGTabOrderIndex(NSString *token, NSArray *order) {
     return NSIntegerMax;
 }
 
+static const void *ACGOriginalTitleKey = &ACGOriginalTitleKey;       // tiêu đề gốc của tab, để bỏ tên riêng thì khôi phục ngay
+static const void *ACGOriginalItemsKey = &ACGOriginalItemsKey;       // danh sách tab gốc của một renderer, để lọc lại khi đổi cấu hình
+static const void *ACGBarRendererKey = &ACGBarRendererKey;           // renderer mà thanh tab đang dùng
+static NSString *const ACGTabConfigChangedNote = @"ACGTabConfigDidChange";
+static NSHashTable<UIView *> *gACGPivotBars = nil;                   // các thanh tab đang sống (tham chiếu yếu)
+
 static void ACGApplyTabName(id item, NSString *token) {
     NSDictionary *names =
         [NSUserDefaults.standardUserDefaults dictionaryForKey:@"ACG.Preference.Tabs.Names"];
     NSString *replacement = names[token] ?: names[ACGCanonicalTabToken(token)];
-    if (![replacement isKindOfClass:NSString.class] || replacement.length == 0) {
-        return;
-    }
     id target = ACGTabValue(item, @[
         @"pivotBarItemRenderer",
         @"pivotBarIconOnlyItemRenderer"
     ]) ?: item;
+    SEL titleGetter = NSSelectorFromString(@"title");
+    SEL titleSetter = NSSelectorFromString(@"setTitle:");
+    if (target != nil && objc_getAssociatedObject(target, ACGOriginalTitleKey) == nil && [target respondsToSelector:titleGetter]) {
+        id original = ((id (*)(id, SEL))objc_msgSend)(target, titleGetter);
+        objc_setAssociatedObject(target, ACGOriginalTitleKey, original ?: (id)NSNull.null, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    }
+    if (![replacement isKindOfClass:NSString.class] || replacement.length == 0) {
+        id original = target != nil ? objc_getAssociatedObject(target, ACGOriginalTitleKey) : nil;
+        if (original != nil && ![original isKindOfClass:NSNull.class] && [target respondsToSelector:titleSetter]) {
+            ((void (*)(id, SEL, id))objc_msgSend)(target, titleSetter, original);
+        }
+        return;
+    }
     Class formattedClass = NSClassFromString(@"YTIFormattedString");
     SEL formattedSelector = NSSelectorFromString(@"formattedStringWithString:");
     id value = replacement;
@@ -3109,11 +3127,22 @@ static void ACGApplyTabName(id item, NSString *token) {
 
 static void ACGSetPivotRenderer(id receiver, SEL selector, id renderer) {
     if (renderer != nil) {
+        if ([receiver isKindOfClass:UIView.class]) {
+            if (gACGPivotBars == nil) gACGPivotBars = [NSHashTable weakObjectsHashTable];
+            [gACGPivotBars addObject:receiver];
+            objc_setAssociatedObject(receiver, ACGBarRendererKey, renderer, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        }
         NSString *setterName = nil;
         NSArray *items = ACGTabItems(renderer, &setterName);
         if (items != nil) {
+            // Lần đầu: ghi nhớ danh sách tab gốc. Các lần sau (đổi cấu hình khi đang chạy) lọc lại từ danh sách gốc này.
+            NSArray *originals = objc_getAssociatedObject(renderer, ACGOriginalItemsKey);
+            if (originals == nil) {
+                originals = [items copy];
+                objc_setAssociatedObject(renderer, ACGOriginalItemsKey, originals, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+            }
             NSMutableArray *filtered = [NSMutableArray array];
-            for (id item in items) {
+            for (id item in originals) {
                 id candidate = item;
                 NSString *token = ACGTabToken(candidate);
                 NSString *hideKey = ACGHideKeyForToken(token);
@@ -3199,7 +3228,7 @@ static void ACGSetPivotRenderer(id receiver, SEL selector, id renderer) {
                 }];
             }
 
-            gACGTabSeen = (NSInteger)items.count;
+            gACGTabSeen = (NSInteger)originals.count;
             gACGTabShown = (NSInteger)filtered.count;
             NSString *firstIdentifier = filtered.count != 0 ? ACGRawTabIdentifier(filtered.firstObject, 0) : nil;
             if (firstIdentifier.length != 0) ACGFirstVisiblePivot = [firstIdentifier copy];
@@ -3222,6 +3251,24 @@ static void ACGSetPivotRenderer(id receiver, SEL selector, id renderer) {
     IMP original = floating ? OriginalSetFloatingPivotRenderer : OriginalSetPivotRenderer;
     if (original != NULL) {
         ((void (*)(id, SEL, id))original)(receiver, selector, renderer);
+    }
+}
+
+// Áp dụng lại cấu hình tab (ẩn/hiện, thứ tự, tên) lên các thanh tab đang chạy, không cần mở lại app.
+// Cách 1: nạp lại renderer đã lưu qua hàm lọc; cách 2: nhờ YouTube dựng lại thanh tab như YTLite (refreshPivotBar).
+static void ACGReapplyTabConfig(void) {
+    for (UIView *bar in gACGPivotBars.allObjects) {
+        id renderer = objc_getAssociatedObject(bar, ACGBarRendererKey);
+        if (renderer == nil || bar.window == nil) continue;
+        @try { ACGSetPivotRenderer(bar, NSSelectorFromString(@"setRenderer:"), renderer); } @catch (__unused id e) {}
+    }
+    Class combo = NSClassFromString(@"YTHeaderContentComboViewController");
+    SEL refresh = NSSelectorFromString(@"refreshPivotBar");
+    if (combo != Nil && [combo instancesRespondToSelector:refresh]) {
+        @try {
+            id controller = [[combo alloc] init];
+            ((void (*)(id, SEL))objc_msgSend)(controller, refresh);
+        } @catch (__unused id e) {}
     }
 }
 
@@ -6532,6 +6579,16 @@ static void ACGPivotItemTraitChanged(UIView *receiver,
 
 void ACGInstallTabBarHooks(void) {
     gACGTabHooked = YES;
+    static dispatch_once_t tabObserverOnce;
+    dispatch_once(&tabObserverOnce, ^{
+        [NSNotificationCenter.defaultCenter addObserverForName:ACGTabConfigChangedNote object:nil queue:NSOperationQueue.mainQueue
+                                                    usingBlock:^(__unused NSNotification *note) {
+            dispatch_async(dispatch_get_main_queue(), ^{
+                ACGReapplyTabConfig();
+                ACGRefreshPivotBarBackground();
+            });
+        }];
+    });
     ACGRefreshTabTint();
     ACGInstallInstanceHook(@"YTPivotBarItemView",
                               @"iconTintColorSelected",
@@ -6632,7 +6689,6 @@ void ACGInstallTabBarHooks(void) {
 #pragma mark - Bảng "Thanh tab" (theo YTKACETabEditorController)
 
 static const void *ACGTabSwitchKey = &ACGTabSwitchKey;
-static NSString *const ACGTabConfigChangedNote = @"ACGTabConfigDidChange";
 
 static void ACGStartupDestinations(NSArray<NSString *> **outTitles, NSArray<NSString *> **outValues) {
     NSArray<NSArray<NSString *> *> *destinations = @[
@@ -6761,6 +6817,28 @@ static UIView *ACGValueMenu(NSString *text, NSArray<NSString *> *titles, NSUInte
     return glass;
 }
 
+// Nút kính dạng viên thuốc cùng kiểu với ACGValueMenu nhưng chỉ chạm là chạy (không mở danh sách); kích thước đặt bằng .frame
+static UIView *ACGActionPill(NSString *text, void (^tap)(void)) {
+    UIVisualEffectView *glass = AutoACMakeGlass(14);
+    glass.frame = CGRectMake(0, 0, 80, 28);   // đặt khung trước khi thêm nút để autoresizing co giãn đúng
+    glass.layer.cornerRadius = 14;
+    glass.layer.cornerCurve = kCACornerCurveContinuous;
+    glass.clipsToBounds = YES;
+    UIButton *b = [UIButton buttonWithType:UIButtonTypeCustom];
+    b.frame = glass.bounds;
+    b.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+    [b setTitle:text forState:UIControlStateNormal];
+    [b setTitleColor:UIColor.systemBlueColor forState:UIControlStateNormal];
+    b.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
+    b.titleLabel.textAlignment = NSTextAlignmentCenter;
+    b.titleLabel.adjustsFontSizeToFitWidth = YES;
+    b.titleLabel.minimumScaleFactor = 0.8;
+    b.contentEdgeInsets = UIEdgeInsetsMake(0, 6, 0, 6);
+    [b addAction:[UIAction actionWithHandler:^(__kindof UIAction *a) { if (tap) tap(); }] forControlEvents:UIControlEventTouchUpInside];
+    [glass.contentView addSubview:b];
+    return glass;
+}
+
 // Tab YouTube hiển thị mặc định là Trang chủ, Shorts, Tạo, Kênh đăng ký, Bạn; các tab dưới đây là tab phụ do AutoAC thêm, mặc định ẩn
 static NSArray<NSString *> *ACGExtraTabTokens(void) {
     return @[@"music", @"live", @"gaming", @"news", @"sports", @"learning", @"fashion", @"playlists", @"history", @"notifications", @"watchlater", @"posts"];
@@ -6790,6 +6868,8 @@ static NSArray<NSDictionary *> *AutoACOverlayCatalog(void) {
         @{@"id": @"pip", @"title": @"PiP", @"symbol": @"pip", @"key": kPlayerPiPKey},
         @{@"id": @"sleep", @"title": AutoACT(@"Hẹn giờ"), @"symbol": @"moon.zzz", @"key": kPlayerSleepBtnKey},
         @{@"id": @"external", @"title": AutoACT(@"Phát ngoài"), @"symbol": @"arrow.up.right.square", @"key": kPlayerExternalKey},
+        @{@"id": @"quality", @"title": AutoACT(@"Chất lượng"), @"symbol": @"slider.horizontal.3", @"key": kPlayerQualityKey},
+        @{@"id": @"loop", @"title": AutoACT(@"Lặp video"), @"symbol": @"repeat", @"key": kPlayerLoopKey},
     ];
 }
 
@@ -6872,29 +6952,32 @@ static void AutoACOverlayMigrateLegacy(void) {
 // "Tất cả" = nút nằm ở cả hai hàng, khi đó nó có hai biểu tượng, mỗi hàng một cái.
 static const CGFloat kOverlayChipHeight = 68.0, kOverlayStripHeight = 84.0, kOverlayBoardHeight = 548.0;
 
+// Bảng sắp xếp dùng tông trung tính (không còn màu riêng cho từng dải); chỉ nút đang chọn có viền sáng
 static UIColor *AutoACOverlayStripColor(NSInteger strip) {
-    return strip == 0 ? UIColor.systemTealColor : (strip == 1 ? UIColor.systemOrangeColor : UIColor.systemPinkColor);
+    return UIColor.labelColor;
 }
 
 static NSString *AutoACOverlayKey(NSInteger strip, NSString *ident) {
     return [NSString stringWithFormat:@"%ld|%@", (long)strip, ident];
 }
 
-// Bề rộng nút và khoảng cách giữa các nút trong một dải có `slots` ô
+// Bề rộng nút và khoảng cách giữa các nút trong một dải: luôn chừa chỗ cho ít nhất 6 nút mỗi hàng
 static void AutoACOverlayMetrics(NSInteger slots, CGFloat boardWidth, CGFloat *chipWidth, CGFloat *gap) {
-    CGFloat inner = boardWidth - 24, w = 58, g = 10;
-    if (slots > 1 && slots * w + (slots - 1) * g > inner) {
-        g = 4;
-        if (slots * w + (slots - 1) * g > inner) w = floor((inner - (slots - 1) * g) / slots);
-    }
-    if (chipWidth) *chipWidth = MAX(w, 36);
-    if (gap) *gap = g;
+    CGFloat inner = boardWidth - 24, g = 4;
+    NSInteger n = MAX(slots, 6);
+    CGFloat w = MIN(MAX(floor((inner - (n - 1) * g) / n), 36), 56);
+    CGFloat spread = n > 1 ? (inner - n * w) / (n - 1) : 0;
+    if (chipWidth) *chipWidth = w;
+    if (gap) *gap = MIN(MAX(spread, g), 10);
 }
 
 @interface AutoACOverlayChip : UIView
 @property (nonatomic, copy) NSString *ident;
 @property (nonatomic, assign) NSInteger strip;
 @property (nonatomic, strong) UIView *disc;
+@property (nonatomic, strong) UIImageView *iconView;
+@property (nonatomic, strong) NSString *symbolName;
+@property (nonatomic, assign) CGFloat shownDiameter;
 @property (nonatomic, strong) UILabel *caption;
 @property (nonatomic, strong) UIColor *tint;
 @property (nonatomic, assign) BOOL picked;
@@ -6911,12 +6994,14 @@ static void AutoACOverlayMetrics(NSInteger slots, CGFloat boardWidth, CGFloat *c
         _disc.layer.cornerRadius = 22;
         _disc.userInteractionEnabled = NO;
         [self addSubview:_disc];
+        _symbolName = [entry[@"symbol"] copy];
         UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:19 weight:UIImageSymbolWeightMedium];
-        UIImageView *icon = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:entry[@"symbol"] withConfiguration:cfg]];
-        icon.tintColor = UIColor.whiteColor;
+        UIImageView *icon = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:_symbolName withConfiguration:cfg]];
+        icon.tintColor = UIColor.labelColor;
         icon.contentMode = UIViewContentModeCenter;
         icon.frame = _disc.bounds;
         [_disc addSubview:icon];
+        _iconView = icon;
         _caption = [[UILabel alloc] initWithFrame:CGRectMake(0, 48, 58, 16)];
         _caption.text = entry[@"title"];
         _caption.font = [UIFont systemFontOfSize:10.5 weight:UIFontWeightMedium];
@@ -6937,10 +7022,12 @@ static void AutoACOverlayMetrics(NSInteger slots, CGFloat boardWidth, CGFloat *c
 }
 
 - (void)refreshLook {
-    _disc.backgroundColor = [_tint colorWithAlphaComponent:0.34];
-    _disc.layer.borderWidth = _picked ? 2.5 : 1.0;
-    _disc.layer.borderColor = (_picked ? UIColor.whiteColor : [_tint colorWithAlphaComponent:0.75]).CGColor;
-    _caption.alpha = _picked ? 1.0 : 0.78;
+    BOOL dim = _strip == 2;   // dải "đang tắt/đang ẩn": mờ hơn
+    _disc.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:dim ? 0.07 : 0.12];
+    _disc.layer.borderWidth = _picked ? 2.0 : 0.75;
+    _disc.layer.borderColor = (_picked ? [UIColor.labelColor colorWithAlphaComponent:0.9] : [UIColor.labelColor colorWithAlphaComponent:0.20]).CGColor;
+    _iconView.alpha = dim ? 0.55 : 1.0;
+    _caption.alpha = _picked ? 1.0 : (dim ? 0.55 : 0.8);
 }
 
 - (void)setPicked:(BOOL)picked {
@@ -6948,10 +7035,22 @@ static void AutoACOverlayMetrics(NSInteger slots, CGFloat boardWidth, CGFloat *c
     [self refreshLook];
 }
 
+// Nút co theo bề rộng được cấp: đĩa tròn tối đa 44pt, chữ nhỏ dần để vẫn đủ 6 nút mỗi hàng
 - (void)layoutSubviews {
     [super layoutSubviews];
-    _disc.center = CGPointMake(CGRectGetMidX(self.bounds), 22);
-    _caption.frame = CGRectMake(0, 48, CGRectGetWidth(self.bounds), 16);
+    CGFloat width = CGRectGetWidth(self.bounds);
+    CGFloat d = MIN(44.0, MAX(28.0, width - 4.0));
+    if (fabs(d - _shownDiameter) > 0.5) {
+        _shownDiameter = d;
+        _disc.bounds = CGRectMake(0, 0, d, d);
+        _disc.layer.cornerRadius = d / 2;
+        _iconView.frame = _disc.bounds;
+        UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:19.0 * d / 44.0 weight:UIImageSymbolWeightMedium];
+        _iconView.image = [UIImage systemImageNamed:_symbolName withConfiguration:cfg];
+        _caption.font = [UIFont systemFontOfSize:width >= 52 ? 10.5 : 9.5 weight:UIFontWeightMedium];
+    }
+    _disc.center = CGPointMake(CGRectGetMidX(self.bounds), d / 2);
+    _caption.frame = CGRectMake(-2, d + 4, width + 4, 16);
 }
 
 @end
@@ -6990,11 +7089,11 @@ static void AutoACOverlayMetrics(NSInteger slots, CGFloat boardWidth, CGFloat *c
         for (NSInteger s = 0; s < 3; s++) {
             UIColor *tint = AutoACOverlayStripColor(s);
             UIView *strip = [[UIView alloc] init];
-            strip.backgroundColor = [tint colorWithAlphaComponent:0.10];
+            strip.backgroundColor = [tint colorWithAlphaComponent:0.05];
             strip.layer.cornerRadius = 20;
             strip.layer.cornerCurve = kCACornerCurveContinuous;
-            strip.layer.borderWidth = 1.0;
-            strip.layer.borderColor = [tint colorWithAlphaComponent:0.35].CGColor;
+            strip.layer.borderWidth = 0.75;
+            strip.layer.borderColor = [tint colorWithAlphaComponent:0.14].CGColor;
             [self addSubview:strip];
             [strips addObject:strip];
             UILabel *hint = [[UILabel alloc] init];
@@ -7006,16 +7105,16 @@ static void AutoACOverlayMetrics(NSInteger slots, CGFloat boardWidth, CGFloat *c
             [hints addObject:hint];
             UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:14 weight:UIImageSymbolWeightSemibold];
             UIImageView *icon = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:symbols[(NSUInteger)s] withConfiguration:cfg]];
-            icon.tintColor = tint;
+            icon.tintColor = UIColor.secondaryLabelColor;
             icon.contentMode = UIViewContentModeCenter;
             UILabel *title = [[UILabel alloc] init];
             title.text = names[(NSUInteger)s];
-            title.font = [UIFont systemFontOfSize:13 weight:UIFontWeightBold];
-            title.textColor = tint;
+            title.font = [UIFont systemFontOfSize:12.5 weight:UIFontWeightSemibold];
+            title.textColor = UIColor.secondaryLabelColor;
             UILabel *caption = [[UILabel alloc] init];
             caption.text = captions[(NSUInteger)s];
             caption.font = [UIFont systemFontOfSize:11];
-            caption.textColor = UIColor.secondaryLabelColor;
+            caption.textColor = UIColor.tertiaryLabelColor;
             caption.textAlignment = NSTextAlignmentRight;
             caption.adjustsFontSizeToFitWidth = YES;
             caption.minimumScaleFactor = 0.8;
@@ -7037,10 +7136,10 @@ static void AutoACOverlayMetrics(NSInteger slots, CGFloat boardWidth, CGFloat *c
         [self addSubview:_detail];
         _detailDisc = [[UIView alloc] initWithFrame:CGRectMake(14, 15, 36, 36)];
         _detailDisc.layer.cornerRadius = 18;
-        _detailDisc.backgroundColor = [UIColor.systemBlueColor colorWithAlphaComponent:0.30];
+        _detailDisc.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:0.12];
         [_detail addSubview:_detailDisc];
         _detailIcon = [[UIImageView alloc] initWithFrame:_detailDisc.bounds];
-        _detailIcon.tintColor = UIColor.whiteColor;
+        _detailIcon.tintColor = UIColor.labelColor;
         _detailIcon.contentMode = UIViewContentModeCenter;
         [_detailDisc addSubview:_detailIcon];
         _detailTitle = [[UILabel alloc] init];
@@ -7279,8 +7378,8 @@ static void AutoACOverlayMetrics(NSInteger slots, CGFloat boardWidth, CGFloat *c
         for (NSInteger s = 0; s < 3; s++) {
             UIColor *tint = AutoACOverlayStripColor(s);
             BOOL on = s == target;
-            self.strips[(NSUInteger)s].backgroundColor = [tint colorWithAlphaComponent:on ? 0.24 : 0.10];
-            self.strips[(NSUInteger)s].layer.borderColor = [tint colorWithAlphaComponent:on ? 0.95 : 0.35].CGColor;
+            self.strips[(NSUInteger)s].backgroundColor = [tint colorWithAlphaComponent:on ? 0.11 : 0.05];
+            self.strips[(NSUInteger)s].layer.borderColor = [tint colorWithAlphaComponent:on ? 0.55 : 0.14].CGColor;
         }
     }];
 }
@@ -7460,19 +7559,20 @@ static NSString *ACGTabDisplayName(NSDictionary *entry) {
     return custom.length ? custom : entry[@"title"];
 }
 
-static const CGFloat kTabChipW = 58.0, kTabRowPitch = 76.0;
+static const CGFloat kTabRowPitch = 70.0, kTabChipHeight = 64.0;
 
-// Số nút mỗi hàng và khoảng cách giữa các nút (dải tự xuống hàng khi nhiều tab)
-static void ACGTabMetrics(CGFloat boardWidth, NSInteger *perRow, CGFloat *gap) {
-    CGFloat inner = boardWidth - 24.0, g = 6.0;
-    NSInteger n = MAX(1, (NSInteger)floor((inner + g) / (kTabChipW + g)));
-    CGFloat spare = inner - n * kTabChipW;
-    CGFloat spread = n > 1 ? spare / (n - 1) : 0;
+// Số nút mỗi hàng (ít nhất 6, nhiều hơn khi màn hình rộng), bề rộng nút và khoảng cách giữa các nút (dải tự xuống hàng khi nhiều tab)
+static void ACGTabMetrics(CGFloat boardWidth, NSInteger *perRow, CGFloat *gap, CGFloat *chipWidth) {
+    CGFloat inner = boardWidth - 24.0, g = 4.0;
+    NSInteger n = MAX(6, (NSInteger)floor((inner + g) / (44.0 + g)));
+    CGFloat w = MIN(MAX(floor((inner - (n - 1) * g) / n), 36.0), 56.0);
+    CGFloat spread = n > 1 ? (inner - n * w) / (n - 1) : 0;
     if (perRow) *perRow = n;
-    if (gap) *gap = MIN(MAX(spread, g), 14.0);
+    if (gap) *gap = MIN(MAX(spread, g), 10.0);
+    if (chipWidth) *chipWidth = w;
 }
 
-static UIColor *ACGTabStripColor(NSInteger strip) { return strip == 0 ? UIColor.systemTealColor : UIColor.systemPinkColor; }
+static UIColor *ACGTabStripColor(NSInteger strip) { return UIColor.labelColor; }   // tông trung tính, không màu riêng cho từng dải
 
 @interface ACGTabBoard : UIView <UIColorPickerViewControllerDelegate>
 @property (nonatomic, strong) NSMutableArray<NSMutableArray<NSString *> *> *lists;   // 0 đang hiện (có thứ tự), 1 đang ẩn
@@ -7513,11 +7613,11 @@ static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString 
         for (NSInteger s = 0; s < 2; s++) {
             UIColor *tint = ACGTabStripColor(s);
             UIView *strip = [[UIView alloc] init];
-            strip.backgroundColor = [tint colorWithAlphaComponent:0.10];
+            strip.backgroundColor = [tint colorWithAlphaComponent:0.05];
             strip.layer.cornerRadius = 20;
             strip.layer.cornerCurve = kCACornerCurveContinuous;
-            strip.layer.borderWidth = 1.0;
-            strip.layer.borderColor = [tint colorWithAlphaComponent:0.35].CGColor;
+            strip.layer.borderWidth = 0.75;
+            strip.layer.borderColor = [tint colorWithAlphaComponent:0.14].CGColor;
             [self addSubview:strip];
             [strips addObject:strip];
             UILabel *hint = [[UILabel alloc] init];
@@ -7529,16 +7629,16 @@ static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString 
             [hints addObject:hint];
             UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:14 weight:UIImageSymbolWeightSemibold];
             UIImageView *icon = [[UIImageView alloc] initWithImage:[UIImage systemImageNamed:symbols[(NSUInteger)s] withConfiguration:cfg]];
-            icon.tintColor = tint;
+            icon.tintColor = UIColor.secondaryLabelColor;
             icon.contentMode = UIViewContentModeCenter;
             UILabel *title = [[UILabel alloc] init];
             title.text = names[(NSUInteger)s];
-            title.font = [UIFont systemFontOfSize:13 weight:UIFontWeightBold];
-            title.textColor = tint;
+            title.font = [UIFont systemFontOfSize:12.5 weight:UIFontWeightSemibold];
+            title.textColor = UIColor.secondaryLabelColor;
             UILabel *caption = [[UILabel alloc] init];
             caption.text = captions[(NSUInteger)s];
             caption.font = [UIFont systemFontOfSize:11];
-            caption.textColor = UIColor.secondaryLabelColor;
+            caption.textColor = UIColor.tertiaryLabelColor;
             caption.textAlignment = NSTextAlignmentRight;
             caption.adjustsFontSizeToFitWidth = YES;
             caption.minimumScaleFactor = 0.75;
@@ -7560,10 +7660,10 @@ static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString 
         [self addSubview:_detail];
         _detailDisc = [[UIView alloc] initWithFrame:CGRectMake(14, 15, 36, 36)];
         _detailDisc.layer.cornerRadius = 18;
-        _detailDisc.backgroundColor = [UIColor.systemBlueColor colorWithAlphaComponent:0.30];
+        _detailDisc.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:0.12];
         [_detail addSubview:_detailDisc];
         _detailIcon = [[UIImageView alloc] initWithFrame:_detailDisc.bounds];
-        _detailIcon.tintColor = UIColor.whiteColor;
+        _detailIcon.tintColor = UIColor.labelColor;
         _detailIcon.contentMode = UIViewContentModeCenter;
         [_detailDisc addSubview:_detailIcon];
         _detailTitle = [[UILabel alloc] init];
@@ -7576,28 +7676,15 @@ static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString 
         _detailCaption.font = [UIFont systemFontOfSize:11.5];
         _detailCaption.textColor = UIColor.secondaryLabelColor;
         [_detail addSubview:_detailCaption];
-        // nút kính đổi tên tab đang chọn
-        UIVisualEffectView *rename = AutoACMakeGlass(14);
-        rename.layer.cornerRadius = 14;
-        rename.layer.cornerCurve = kCACornerCurveContinuous;
-        rename.clipsToBounds = YES;
-        UIButton *renameTap = [UIButton buttonWithType:UIButtonTypeCustom];
-        renameTap.frame = CGRectMake(0, 0, 80, 28);
-        renameTap.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        [renameTap setTitle:[AutoACT(@"Đổi tên tab") stringByAppendingString:@"…"] forState:UIControlStateNormal];
-        [renameTap setTitleColor:UIColor.systemBlueColor forState:UIControlStateNormal];
-        renameTap.titleLabel.font = [UIFont systemFontOfSize:13 weight:UIFontWeightSemibold];
-        renameTap.titleLabel.adjustsFontSizeToFitWidth = YES;
-        renameTap.titleLabel.minimumScaleFactor = 0.8;
-        [renameTap addTarget:self action:@selector(renameTapped) forControlEvents:UIControlEventTouchUpInside];
-        [rename.contentView addSubview:renameTap];
-        _renameButton = rename;
-        [_detail addSubview:rename];
+        // nút kính đổi tên tab đang chọn (cùng hàng và cùng kích thước với nút Hiện/Ẩn)
+        __weak ACGTabBoard *weakBoard = self;
+        _renameButton = ACGActionPill([AutoACT(@"Đổi tên tab") stringByAppendingString:@"…"], ^{ [weakBoard renameTapped]; });
+        [_detail addSubview:_renameButton];
 
         _settingsTitle = [[UILabel alloc] init];
-        _settingsTitle.text = AutoACT(@"CHUNG");
-        _settingsTitle.font = [UIFont systemFontOfSize:13 weight:UIFontWeightBold];
-        _settingsTitle.textColor = UIColor.systemIndigoColor;
+        _settingsTitle.text = @"Liquid glass";
+        _settingsTitle.font = [UIFont systemFontOfSize:12.5 weight:UIFontWeightSemibold];
+        _settingsTitle.textColor = UIColor.secondaryLabelColor;
         [self addSubview:_settingsTitle];
         _settingsCard = [[UIView alloc] init];
         _settingsCard.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:0.06];
@@ -7654,7 +7741,6 @@ static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString 
     [kPrefs setObject:[self.lists[0] copy] forKey:@"ACG.Preference.Tabs.Order"];
     [NSNotificationCenter.defaultCenter postNotificationName:ACGTabConfigChangedNote object:nil];
     ACGRefreshPivotBarBackground();
-    AutoACRestartHint();
     [self buildSettings];   // danh sách "Tab khi mở app" phụ thuộc tab đang ẩn
     [self setNeedsLayout];
 }
@@ -7673,7 +7759,6 @@ static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString 
     [NSNotificationCenter.defaultCenter postNotificationName:ACGTabConfigChangedNote object:nil];
     ACGRefreshPivotBarBackground();
     ACGRefreshPivotLabels();
-    AutoACRestartHint();
 }
 
 #pragma mark Cài đặt chung
@@ -7724,24 +7809,31 @@ static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString 
     __weak ACGTabBoard *weakSelf = self;
     BOOL liquid = ACGLiquidGlassAvailable();
 
-    NSArray<NSString *> *startTitles = nil, *startValues = nil;
-    ACGStartupDestinations(&startTitles, &startValues);
-    NSUInteger startIndex = [startValues indexOfObject:ACGPreferenceObject(@"ACG.Preference.Tabs.Startup") ?: @""];
-    NSUInteger startCur = (startIndex != NSNotFound && startIndex < startTitles.count) ? startIndex : 0;
-    UIView *startPill = ACGValueMenu(startTitles[startCur], startTitles, startCur, ^(NSUInteger pick) {
-        ACGSetPreferenceObject(@"ACG.Preference.Tabs.Startup", startValues[pick]);
-        [weakSelf buildSettings];
-        AutoACRestartHint();
-    });
-    [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Tab khi mở app") detail:AutoACT(@"Tab hiện khi mở app") accessory:startPill tap:nil]];
-
-    [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Bật nhãn") detail:AutoACT(@"Hiện tên dưới icon")
-        accessory:[self switchForKey:@"ACG.Preference.Tabs.LabelsHidden" on:![ACGPreferenceObject(@"ACG.Preference.Tabs.LabelsHidden") boolValue]] tap:nil]];
-
+    // ── Nhóm kính lỏng ──
     if (liquid) {
+        UIView *glassPill = ACGValueMenu(ACGTabBarGlassMode() == 1 ? @"Glass" : AutoACT(@"Mặc định"), @[AutoACT(@"Mặc định"), @"Glass"],
+                                         ACGTabBarGlassMode() == 1 ? 1 : 0, ^(NSUInteger pick) {
+            ACGSetPreferenceObject(@"ACG.Preference.Tabs.GlassMode", @(pick));
+            [weakSelf buildSettings];
+            ACGRefreshPivotBarBackground();
+            AutoACRestartHint();
+        });
+        [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Kiểu thanh tab") detail:AutoACT(@"Mặc định hoặc Glass") accessory:glassPill tap:nil]];
         [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Bật thu gọn") detail:AutoACT(@"Thu nhỏ khi cuộn")
             accessory:[self switchForKey:@"ACG.Preference.Tabs.GlassMinimize" on:[ACGPreferenceObject(@"ACG.Preference.Tabs.GlassMinimize") boolValue]] tap:nil]];
+        [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Kính lỏng thanh trên") detail:AutoACT(@"Nút tìm kiếm, thông báo, quay lại")
+            accessory:[self switchForKey:kGlassTopKey on:[kPrefs boolForKey:kGlassTopKey]] tap:nil]];
+        [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Kính lỏng bảng chọn") detail:AutoACT(@"Bảng, menu và hộp thoại")
+            accessory:[self switchForKey:kGlassSheetKey on:[kPrefs boolForKey:kGlassSheetKey]] tap:nil]];
+        [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Kính lỏng trình phát") detail:AutoACT(@"Nút nổi trên video")
+            accessory:[self switchForKey:kGlassPlayerKey on:[kPrefs boolForKey:kGlassPlayerKey]] tap:nil]];
     }
+    [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Shorts tràn xuống thanh tab") detail:AutoACT(@"Dock trong suốt, không dải trắng/đen")
+        accessory:[self switchForKey:kShortsFullBleedKey on:[kPrefs boolForKey:kShortsFullBleedKey]] tap:nil]];
+
+    // ── Nhãn, màu, tab khi mở app ──
+    [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Bật nhãn") detail:AutoACT(@"Hiện tên dưới icon")
+        accessory:[self switchForKey:@"ACG.Preference.Tabs.LabelsHidden" on:![ACGPreferenceObject(@"ACG.Preference.Tabs.LabelsHidden") boolValue]] tap:nil]];
 
     NSArray<NSString *> *tintTitles = @[AutoACT(@"Tắt"), AutoACT(@"Chỉ chữ"), @"Icon-text"];
     UIView *tintPill = ACGValueMenu(tintTitles[ACGTintIndex()], tintTitles, ACGTintIndex(), ^(NSUInteger pick) {
@@ -7758,16 +7850,17 @@ static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString 
     dot.layer.borderColor = UIColor.secondaryLabelColor.CGColor;
     [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Kiểu màu") detail:AutoACT(@"Màu tab đang chọn") accessory:dot tap:@selector(pickTintColor)]];
 
-    if (liquid) {
-        UIView *glassPill = ACGValueMenu(ACGTabBarGlassMode() == 1 ? @"Glass" : AutoACT(@"Mặc định"), @[AutoACT(@"Mặc định"), @"Glass"],
-                                         ACGTabBarGlassMode() == 1 ? 1 : 0, ^(NSUInteger pick) {
-            ACGSetPreferenceObject(@"ACG.Preference.Tabs.GlassMode", @(pick));
-            [weakSelf buildSettings];
-            ACGRefreshPivotBarBackground();
-            AutoACRestartHint();
-        });
-        [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Kiểu thanh tab") detail:AutoACT(@"Mặc định hoặc Glass") accessory:glassPill tap:nil]];
-    }
+    NSArray<NSString *> *startTitles = nil, *startValues = nil;
+    ACGStartupDestinations(&startTitles, &startValues);
+    NSUInteger startIndex = [startValues indexOfObject:ACGPreferenceObject(@"ACG.Preference.Tabs.Startup") ?: @""];
+    NSUInteger startCur = (startIndex != NSNotFound && startIndex < startTitles.count) ? startIndex : 0;
+    UIView *startPill = ACGValueMenu(startTitles[startCur], startTitles, startCur, ^(NSUInteger pick) {
+        ACGSetPreferenceObject(@"ACG.Preference.Tabs.Startup", startValues[pick]);
+        [weakSelf buildSettings];
+        AutoACRestartHint();
+    });
+    [self.settingRows addObject:[self settingRowWithTitle:AutoACT(@"Tab khi mở app") detail:AutoACT(@"Tab hiện khi mở app") accessory:startPill tap:nil]];
+
     for (UIView *row in self.settingRows) [self.settingsCard addSubview:row];
     [self setNeedsLayout];
 }
@@ -7804,37 +7897,17 @@ static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString 
     return rows * kTabRowPitch + 8.0;
 }
 
-static const CGFloat kTabSettingRow = 56.0;
+static const CGFloat kTabSettingRow = 52.0;
 
+// Thứ tự từ trên xuống: nhóm Liquid glass, hai dải tab (đang hiện / đang ẩn), thẻ chi tiết, chú thích
 - (CGFloat)layoutFrames:(BOOL)apply {
     CGFloat width = CGRectGetWidth(self.bounds) > 0 ? CGRectGetWidth(self.bounds) : 320.0, y = 4;
-    NSInteger perRow = 4;
-    ACGTabMetrics(width, &perRow, NULL);
-    for (NSInteger s = 0; s < 2; s++) {
-        CGFloat h = [self stripHeight:s perRow:perRow];
-        if (apply) {
-            NSArray *parts = self.headerParts[(NSUInteger)s];
-            ((UIView *)parts[0]).frame = CGRectMake(0, y + 4, 20, 20);
-            ((UIView *)parts[1]).frame = CGRectMake(26, y, 120, 28);
-            ((UIView *)parts[2]).frame = CGRectMake(width - 170, y, 170, 28);
-            UIView *strip = self.strips[(NSUInteger)s];
-            strip.frame = CGRectMake(0, y + 30, width, h);
-            self.hints[(NSUInteger)s].frame = CGRectMake(0, 0, width, kTabRowPitch);
-        }
-        y += 30 + h + 12;
-    }
-    CGFloat detailHeight = 108;
+    NSInteger perRow = 6;
+    ACGTabMetrics(width, &perRow, NULL, NULL);
+
+    // 1) Liquid glass
     if (apply) {
-        self.detail.frame = CGRectMake(0, y, width, detailHeight);
-        CGFloat pillWidth = 104;
-        self.detailTitle.frame = CGRectMake(62, 12, MAX(width - 62 - pillWidth - 24, 40), 22);
-        self.detailCaption.frame = CGRectMake(62, 35, MAX(width - 62 - pillWidth - 24, 40), 16);
-        self.pill.frame = CGRectMake(width - 14 - pillWidth, 17, pillWidth, 32);
-        self.renameButton.frame = CGRectMake(14, 66, MIN(width - 28, 190), 30);
-    }
-    y += detailHeight + 16;
-    if (apply) {
-        self.settingsTitle.frame = CGRectMake(2, y, 200, 24);
+        self.settingsTitle.frame = CGRectMake(2, y, 240, 24);
         self.settingsCard.frame = CGRectMake(0, y + 28, width, self.settingRows.count * kTabSettingRow);
         for (NSUInteger i = 0; i < self.settingRows.count; i++) {
             UIView *row = self.settingRows[i];
@@ -7849,8 +7922,8 @@ static const CGFloat kTabSettingRow = 56.0;
                 aw = size.width;
             }
             CGFloat tw = MAX(width - 16 - aw - 28, 60);
-            [row viewWithTag:101].frame = CGRectMake(16, 9, tw, 20);
-            [row viewWithTag:102].frame = CGRectMake(16, 31, tw, 16);
+            [row viewWithTag:101].frame = CGRectMake(16, 7, tw, 20);
+            [row viewWithTag:102].frame = CGRectMake(16, 28, tw, 16);
             if (i > 0) {
                 UIView *line = [row viewWithTag:104];
                 if (!line) {
@@ -7863,12 +7936,39 @@ static const CGFloat kTabSettingRow = 56.0;
             }
         }
     }
-    y += 28 + self.settingRows.count * kTabSettingRow + 12;
-    if (apply) {
-        CGSize fit = [self.footer sizeThatFits:CGSizeMake(MAX(width - 4, 10), CGFLOAT_MAX)];
-        self.footer.frame = CGRectMake(2, y, MAX(width - 4, 10), ceil(fit.height));
+    y += 28 + self.settingRows.count * kTabSettingRow + 16;
+
+    // 2) Hai dải tab
+    for (NSInteger s = 0; s < 2; s++) {
+        CGFloat h = [self stripHeight:s perRow:perRow];
+        if (apply) {
+            NSArray *parts = self.headerParts[(NSUInteger)s];
+            ((UIView *)parts[0]).frame = CGRectMake(0, y + 4, 20, 20);
+            ((UIView *)parts[1]).frame = CGRectMake(26, y, 120, 28);
+            ((UIView *)parts[2]).frame = CGRectMake(width - 170, y, 170, 28);
+            UIView *strip = self.strips[(NSUInteger)s];
+            strip.frame = CGRectMake(0, y + 30, width, h);
+            self.hints[(NSUInteger)s].frame = CGRectMake(0, 0, width, kTabRowPitch);
+        }
+        y += 30 + h + 12;
     }
+
+    // 3) Thẻ chi tiết: hàng 1 tên và trạng thái; hàng 2 hai nút kính cùng cỡ (Hiện/Ẩn và Đổi tên tab)
+    CGFloat detailHeight = 114;
+    if (apply) {
+        self.detail.frame = CGRectMake(0, y, width, detailHeight);
+        self.detailDisc.frame = CGRectMake(14, 12, 36, 36);
+        self.detailTitle.frame = CGRectMake(62, 11, MAX(width - 62 - 14, 40), 22);
+        self.detailCaption.frame = CGRectMake(62, 33, MAX(width - 62 - 14, 40), 16);
+        CGFloat pillWidth = floor((width - 28 - 10) / 2.0), pillHeight = 36;
+        self.pill.frame = CGRectMake(14, 62, pillWidth, pillHeight);
+        self.renameButton.frame = CGRectMake(14 + pillWidth + 10, 62, pillWidth, pillHeight);
+    }
+    y += detailHeight + 14;
+
+    // 4) Chú thích
     CGSize fit = [self.footer sizeThatFits:CGSizeMake(MAX(width - 4, 10), CGFLOAT_MAX)];
+    if (apply) self.footer.frame = CGRectMake(2, y, MAX(width - 4, 10), ceil(fit.height));
     return y + ceil(fit.height) + 8;
 }
 
@@ -7883,10 +7983,10 @@ static const CGFloat kTabSettingRow = 56.0;
     }
 }
 
-- (CGPoint)slotOrigin:(NSInteger)slot strip:(NSInteger)s perRow:(NSInteger)perRow gap:(CGFloat)gap {
+- (CGPoint)slotOrigin:(NSInteger)slot strip:(NSInteger)s perRow:(NSInteger)perRow gap:(CGFloat)gap chipWidth:(CGFloat)chipWidth {
     CGFloat top = CGRectGetMinY(self.strips[(NSUInteger)s].frame) + 4.0;
     NSInteger row = slot / perRow, col = slot % perRow;
-    return CGPointMake(12 + col * (kTabChipW + gap), top + row * kTabRowPitch);
+    return CGPointMake(12 + col * (chipWidth + gap), top + row * kTabRowPitch);
 }
 
 - (void)placeChip:(AutoACOverlayChip *)chip frame:(CGRect)frame animated:(BOOL)animated {
@@ -7901,9 +8001,9 @@ static const CGFloat kTabSettingRow = 56.0;
 - (void)layoutChipsAnimated:(BOOL)animated {
     CGFloat width = CGRectGetWidth(self.bounds);
     if (width <= 0) return;
-    NSInteger perRow = 4;
-    CGFloat gap = 6;
-    ACGTabMetrics(width, &perRow, &gap);
+    NSInteger perRow = 6;
+    CGFloat gap = 4, chipWidth = 48;
+    ACGTabMetrics(width, &perRow, &gap, &chipWidth);
     NSString *dragKey = self.dragChip ? ACGTabKey([self boardStripOf:self.dragChip], self.dragChip.ident) : nil;
     for (NSInteger s = 0; s < 2; s++) {
         NSMutableArray<AutoACOverlayChip *> *items = [NSMutableArray array];
@@ -7919,9 +8019,9 @@ static const CGFloat kTabSettingRow = 56.0;
         for (NSInteger i = 0; i <= (NSInteger)items.count; i++) {
             if (hasHole && i == self.holeIndex) slot++;
             if (i == (NSInteger)items.count) break;
-            CGPoint o = [self slotOrigin:slot strip:s perRow:perRow gap:gap];
+            CGPoint o = [self slotOrigin:slot strip:s perRow:perRow gap:gap chipWidth:chipWidth];
             slot++;
-            [self placeChip:items[(NSUInteger)i] frame:CGRectMake(o.x, o.y, kTabChipW, 68) animated:animated];
+            [self placeChip:items[(NSUInteger)i] frame:CGRectMake(o.x, o.y, chipWidth, kTabChipHeight) animated:animated];
         }
     }
 }
@@ -7981,7 +8081,7 @@ static const CGFloat kTabSettingRow = 56.0;
     self.detailCaption.text = shown ? AutoACT(@"Đang hiện trên thanh tab") : AutoACT(@"Đang ẩn");
     UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:17 weight:UIImageSymbolWeightMedium];
     self.detailIcon.image = entry ? [UIImage systemImageNamed:entry[@"symbol"] withConfiguration:cfg] : nil;
-    self.detailDisc.backgroundColor = [ACGTabStripColor(shown ? 0 : 1) colorWithAlphaComponent:0.34];
+    self.detailDisc.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:shown ? 0.14 : 0.08];
     NSArray<NSString *> *titles = @[AutoACT(@"Hiện"), AutoACT(@"Ẩn")];
     NSUInteger position = shown ? 0 : 1;
     [self.pill removeFromSuperview];
@@ -8039,7 +8139,6 @@ static const CGFloat kTabSettingRow = 56.0;
         [kPrefs setObject:updated forKey:@"ACG.Preference.Tabs.Names"];
         [NSNotificationCenter.defaultCenter postNotificationName:ACGTabConfigChangedNote object:nil];
         [weakSelf reloadChipsAnimated:NO];
-        AutoACRestartHint();
     }]];
     [AutoACTopViewController() presentViewController:alert animated:YES completion:nil];
 }
@@ -8060,14 +8159,14 @@ static const CGFloat kTabSettingRow = 56.0;
     NSString *dragKey = ACGTabKey([self boardStripOf:self.dragChip], self.dragChip.ident);
     NSInteger count = 0;
     for (NSString *ident in self.lists[(NSUInteger)strip]) if (![ACGTabKey(strip, ident) isEqualToString:dragKey]) count++;
-    NSInteger perRow = 4;
-    CGFloat gap = 6;
-    ACGTabMetrics(CGRectGetWidth(self.bounds), &perRow, &gap);
+    NSInteger perRow = 6;
+    CGFloat gap = 4, chipWidth = 48;
+    ACGTabMetrics(CGRectGetWidth(self.bounds), &perRow, &gap, &chipWidth);
     NSInteger best = 0;
     CGFloat bestDistance = CGFLOAT_MAX;
     for (NSInteger i = 0; i <= count; i++) {
-        CGPoint o = [self slotOrigin:i strip:strip perRow:perRow gap:gap];
-        CGFloat dx = p.x - (o.x + kTabChipW / 2), dy = p.y - (o.y + 34);
+        CGPoint o = [self slotOrigin:i strip:strip perRow:perRow gap:gap chipWidth:chipWidth];
+        CGFloat dx = p.x - (o.x + chipWidth / 2), dy = p.y - (o.y + kTabChipHeight / 2);
         CGFloat d = dx * dx + dy * dy;
         if (d < bestDistance) { bestDistance = d; best = i; }
     }
@@ -8079,8 +8178,8 @@ static const CGFloat kTabSettingRow = 56.0;
         for (NSInteger s = 0; s < 2; s++) {
             UIColor *tint = ACGTabStripColor(s);
             BOOL on = s == target;
-            self.strips[(NSUInteger)s].backgroundColor = [tint colorWithAlphaComponent:on ? 0.24 : 0.10];
-            self.strips[(NSUInteger)s].layer.borderColor = [tint colorWithAlphaComponent:on ? 0.95 : 0.35].CGColor;
+            self.strips[(NSUInteger)s].backgroundColor = [tint colorWithAlphaComponent:on ? 0.11 : 0.05];
+            self.strips[(NSUInteger)s].layer.borderColor = [tint colorWithAlphaComponent:on ? 0.55 : 0.14].CGColor;
         }
     }];
 }
@@ -8465,28 +8564,13 @@ static NSArray<AutoACItem *> *AutoACBuildItems(void) {
         AutoACT(@"Ẩn thẻ gợi ý (nudge) và Mix trong bảng tin. Cần mở lại app."), restart)];
 
     // ── Chức năng bổ sung từ ytkace ──
-    [items addObject:ACSwitch(AutoACT(@"Quảng cáo"), @"No premium", AutoACT(@"Chặn popup mời mua Premium"), @"xmark.shield.fill",
+    [items addObject:ACSwitch(AutoACT(@"Quảng cáo"), @"No premium", AutoACT(@"Chặn popup và thẻ mời Premium"), @"xmark.shield.fill",
         UIColor.systemRedColor, kHidePromosKey,
-        AutoACT(@"No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium. Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app."),
+        AutoACT(@"No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium, đồng thời gỡ khỏi bảng tin các thẻ mời dùng thử hoặc mua YouTube Music Premium (không để lại khoảng trống). Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app."),
         TWEAK_UPSTREAM_NOYTPREMIUM_GATED ? restart : nil)];
-    [items addObject:ACSwitch(AutoACT(@"Quảng cáo"), AutoACT(@"Chặn Music Premium"), AutoACT(@"Thẻ mời dùng thử trong bảng tin"), @"music.note.list",
-        UIColor.systemPinkColor, kHideMusicPremiumKey,
-        AutoACT(@"Ẩn thẻ mời dùng thử hoặc mua YouTube Music Premium (và các thẻ mời nâng cấp tương tự) hiện giữa bảng tin. Thẻ được gỡ khỏi danh sách nên không để lại khoảng trống. Cần mở lại app. Popup mời mua Premium do công tắc No premium lo."), restart)];
     [items addObject:ACSwitch(AutoACT(@"Quảng cáo"), AutoACT(@"Ẩn nhãn trả phí"), AutoACT(@"Có quảng cáo trả phí"), @"tag.slash.fill",
         UIColor.systemOrangeColor, kHidePaidPromoKey,
         AutoACT(@"Ẩn nhãn \"Có quảng cáo trả phí\" hiện trên trình phát khi video có nội dung được tài trợ. Chỉ ẩn nhãn, không chặn nội dung của video."), nil)];
-    [items addObject:ACSwitch(AutoACT(@"Giao diện"), AutoACT(@"Shorts tràn xuống thanh tab"), AutoACT(@"Dock trong suốt, không dải trắng/đen"), @"rectangle.bottomthird.inset.filled",
-        UIColor.systemTealColor, kShortsFullBleedKey,
-        AutoACT(@"Ở tab Shorts, nền dưới video và thanh tab trong suốt (không trắng, không đen) và video kéo xuống tận thanh tab như các tab khác. Thử nghiệm: nếu Shorts bị lệch hoặc cuộn giật, tắt công tắc này. Chỉ có tác dụng khi thanh tab ở chế độ kính lỏng."), nil)];
-    [items addObject:ACSwitch(AutoACT(@"Giao diện"), AutoACT(@"Kính lỏng thanh trên"), AutoACT(@"Nút tìm kiếm, thông báo, quay lại"), @"magnifyingglass.circle.fill",
-        UIColor.systemCyanColor, kGlassTopKey,
-        AutoACT(@"Đặt nền kính lỏng sau cụm nút bên phải của thanh trên (tìm kiếm, thông báo…) và nút nhỏ bên trái như nút quay lại. Cần iOS 26 trở lên. Ý tưởng theo ytkace (MIT)."), nil)];
-    [items addObject:ACSwitch(AutoACT(@"Giao diện"), AutoACT(@"Kính lỏng bảng chọn"), AutoACT(@"Bảng, menu và hộp thoại"), @"rectangle.bottomhalf.inset.filled",
-        UIColor.systemCyanColor, kGlassSheetKey,
-        AutoACT(@"Thay nền đặc của bảng chọn đáy màn hình, menu ngữ cảnh và hộp thoại bằng kính lỏng. Cần iOS 26 trở lên. Nếu chữ khó đọc hoặc bảng bị lệch, tắt công tắc này."), nil)];
-    [items addObject:ACSwitch(AutoACT(@"Giao diện"), AutoACT(@"Kính lỏng trình phát"), AutoACT(@"Nút nổi trên video"), @"play.rectangle.fill",
-        UIColor.systemCyanColor, kGlassPlayerKey,
-        AutoACT(@"Đổi nền mờ của các nút nổi trong trình phát (YTFrostedGlassView) sang kính lỏng. Cần iOS 26 trở lên."), nil)];
     [items addObject:ACSwitch(AutoACT(@"Giao diện"), AutoACT(@"Ẩn hiệu ứng mở"), AutoACT(@"Vào thẳng trang chủ"), @"bolt.fill",
         UIColor.systemOrangeColor, kNoLaunchAnimKey,
         AutoACT(@"Ẩn hiệu ứng logo YouTube lúc khởi động để vào app nhanh hơn."), nil)];
@@ -8967,8 +9051,9 @@ static NSString *AutoACDiagnosticsText(void) {
     [t appendFormat:@"\n[Lọc danh sách] tab hiện tại %@ · %@\n", gListTabIdent.length ? gListTabIdent : @"?",
         gListFilterAllowed ? @"đang lọc" : (gListTabIdent.length ? @"không lọc (chỉ lọc ở Trang chủ)" : @"không lọc (chưa đọc được tab)")];
     [t appendFormat:@"[Lọc danh sách] bỏ hàng Short %ld · bài đăng %ld · Mix %ld · game %ld · thẻ Premium %ld\n", (long)gDropShelf, (long)gDropPost, (long)gDropMix, (long)gDropGame, (long)gDropBanner];
+    [t appendFormat:@"[Lọc danh sách] ô đã duyệt %ld · Ẩn video Short %@\n", (long)gFeedCellsSeen, [kPrefs boolForKey:kHideShortsShelfKey] ? @"bật" : @"tắt"];
     if (gACGShortsExtendDiag) [t appendFormat:@"[Short kéo xuống] %@\n", gACGShortsExtendDiag];
-    if (gPremiumSeen.count) [t appendFormat:@"[Thẻ Premium/Music đã thấy] %@\n", [gPremiumSeen.array componentsJoinedByString:@" | "]];
+    if (gPremiumSeen.count) [t appendFormat:@"[Thẻ Premium/Music/Short đã thấy] %@\n", [gPremiumSeen.array componentsJoinedByString:@" | "]];
     if (gOverlaySeen.count) [t appendFormat:@"\n[%@]\n%@\n", AutoACT(@"Mã lớp phủ Shorts"), [gOverlaySeen.array componentsJoinedByString:@"\n"]];
     return t;
 }
@@ -9838,7 +9923,7 @@ static BOOL AutoACIsPremiumUpsellIdent(NSString *ident) {
 }
 static void AutoACNotePremiumIdent(NSString *ident) {
     if (ident.length == 0 || ![kPrefs boolForKey:kDiagKey]) return;
-    for (NSString *w in @[@"premium", @"music", @"upsell", @"banner"]) {
+    for (NSString *w in @[@"premium", @"music", @"upsell", @"banner", @"short", @"reel"]) {
         if ([ident rangeOfString:w options:NSCaseInsensitiveSearch].location == NSNotFound) continue;
         if (!gPremiumSeen) gPremiumSeen = [NSMutableOrderedSet orderedSet];
         if (gPremiumSeen.count < 12) [gPremiumSeen addObject:ident];
@@ -9855,7 +9940,7 @@ static void AutoACInstallShortsShelfHooks(void) {
             if (now - at > 1.0) {   // hàm này chạy rất nhiều lần khi lướt: đọc cài đặt nhớ 1 giây
                 fShelf = [kPrefs boolForKey:kHideShortsShelfKey]; fPost = [kPrefs boolForKey:kHideCommunityKey];
                 fMix = [kPrefs boolForKey:kHideMixesKey]; fGame = [kPrefs boolForKey:kHideGamesKey];
-                fBanner = [kPrefs boolForKey:kHideMusicPremiumKey];
+                fBanner = [kPrefs boolForKey:kHidePromosKey];
                 at = now;
             }
             if (!(fShelf || fPost || fMix || fGame || fBanner) || !gListFilterAllowed || (gShortsOnScreenAt > 0 && now - gShortsOnScreenAt < 2.5))
@@ -9866,7 +9951,8 @@ static void AutoACInstallShortsShelfHooks(void) {
                 NSString *d = [self_ description];
                 NSInteger v = 0;
                 if (d.length && ![d containsString:@"history*"]) {
-                    if ([d containsString:@"shorts_shelf.eml"] || [d containsString:@"shorts_video_cell.eml"] || [d containsString:@"6Shorts"]) v = 2;
+                    if ([d containsString:@"shorts_shelf.eml"] || [d containsString:@"shorts_video_cell.eml"] || [d containsString:@"6Shorts"] ||
+                        [d containsString:@"reel_shelf.eml"] || [d containsString:@"shorts_grid.eml"] || [d containsString:@"shorts_lockup_shelf"]) v = 2;
                     else if ([d containsString:@"id.ui.backstage.original_post"] || [d containsString:@"id_ui_backstage_original_post"] ||
                              [d containsString:@"backstage_original_post"]) v = 3;
                     else if ([d containsString:@"feed_nudge"]) v = 4;
@@ -9890,8 +9976,10 @@ static void AutoACInstallShortsShelfHooks(void) {
         return ^id(id self_, NSIndexPath *indexPath) {
             UICollectionViewCell *cell = ((id (*)(id, SEL, id))original)(self_, selector, indexPath);
             AutoACRefreshListScope();
-            BOOL bannerOn = [kPrefs boolForKey:kHideMusicPremiumKey];
-            BOOL shelfOn = gListFilterAllowed && [kPrefs boolForKey:kHideShortsShelfKey];
+            BOOL bannerOn = [kPrefs boolForKey:kHidePromosKey];
+            // Xoá hàng Short ở mức ô (deleteItemsAtIndexPaths) không để lại khoảng trống, nên khi chưa đọc được tab hiện tại vẫn cho phép
+            // (trước đây chưa đọc được tab thì bộ lọc tắt hẳn và "Ẩn video Short" không chạy)
+            BOOL shelfOn = (gListFilterAllowed || gListTabIdent.length == 0) && [kPrefs boolForKey:kHideShortsShelfKey];
             if (!cell || !(bannerOn || shelfOn || [kPrefs boolForKey:kDiagKey])) return cell;
             if (gShortsOnScreenAt > 0 && CACurrentMediaTime() - gShortsOnScreenAt < 2.5) return cell;
             BOOL shelf = shelfOn && [cell isKindOfClass:NSClassFromString(@"YTReelShelfCell")];
@@ -9899,8 +9987,15 @@ static void AutoACInstallShortsShelfHooks(void) {
             if ([cell respondsToSelector:@selector(node)]) {
                 id node = ((id (*)(id, SEL))objc_msgSend)(cell, @selector(node));
                 NSString *ident = [node respondsToSelector:@selector(accessibilityIdentifier)] ? [node accessibilityIdentifier] : nil;
+                gFeedCellsSeen++;
                 AutoACNotePremiumIdent(ident);
-                if (!shelf && shelfOn) shelf = [ident isEqualToString:@"eml.shorts-grid"] || [ident isEqualToString:@"eml.shorts-shelf"];
+                if (!shelf && shelfOn && ident.length > 0) {   // ident nil thì rangeOfString trả {0,0} chứ không phải NSNotFound
+                    shelf = [ident isEqualToString:@"eml.shorts-grid"] || [ident isEqualToString:@"eml.shorts-shelf"] ||
+                            ([ident rangeOfString:@"shorts" options:NSCaseInsensitiveSearch].location != NSNotFound &&
+                             ([ident rangeOfString:@"shelf" options:NSCaseInsensitiveSearch].location != NSNotFound ||
+                              [ident rangeOfString:@"grid" options:NSCaseInsensitiveSearch].location != NSNotFound)) ||
+                            [ident rangeOfString:@"reel_shelf" options:NSCaseInsensitiveSearch].location != NSNotFound;
+                }
                 upsell = bannerOn && AutoACIsPremiumUpsellIdent(ident);
             }
             if ((shelf || upsell) && indexPath && [self_ respondsToSelector:@selector(deleteItemsAtIndexPaths:)]) {
@@ -11012,6 +11107,127 @@ static void AutoACShowSleepWheel(UIView *button) {
     });
 }
 
+// ── Chất lượng video: bánh xe chọn độ phân giải của video đang xem (đặt ràng buộc định dạng lên activeVideo, như YTKACE) ──
+static NSString *gQualityPickedLabel = nil, *gQualityPickedVideo = nil;
+
+static NSInteger AutoACQualityResolution(NSString *label) {
+    NSScanner *scanner = [NSScanner scannerWithString:label ?: @""];
+    NSInteger value = 0;
+    return [scanner scanInteger:&value] ? value : 0;
+}
+
+static BOOL AutoACApplyQualityLabel(id video, NSString *label) {
+    Class constraintClass = NSClassFromString(@"MLQuickMenuVideoQualitySettingFormatConstraint");
+    SEL initializer = NSSelectorFromString(@"initWithVideoQualitySetting:formatSelectionReason:qualityLabel:");
+    SEL setter = NSSelectorFromString(@"setVideoFormatConstraint:");
+    if (!video || label.length == 0 || !constraintClass || ![video respondsToSelector:setter]) return NO;
+    id allocated = [constraintClass alloc];
+    if (![allocated respondsToSelector:initializer]) return NO;
+    id constraint = ((id (*)(id, SEL, NSInteger, NSInteger, id))objc_msgSend)(allocated, initializer, 3, 2, label);
+    if (!constraint) return NO;
+    ((void (*)(id, SEL, id))objc_msgSend)(video, setter, constraint);
+    return YES;
+}
+
+static void AutoACShowQualityPicker(UIView *button) {
+    id video = AutoACObj(gPlayerVC, @[@"activeVideo"]);
+    id formats = AutoACObj(video, @[@"selectableVideoFormats"]);
+    NSMutableArray<NSString *> *labels = [NSMutableArray array];
+    if ([formats isKindOfClass:NSArray.class]) {
+        for (id format in formats) {
+            id label = AutoACObj(format, @[@"qualityLabel"]);
+            if ([label isKindOfClass:NSString.class] && [(NSString *)label length] > 0 && ![labels containsObject:label]) [labels addObject:label];
+        }
+    }
+    if (labels.count == 0) {
+        AutoACShowHub(@"exclamationmark.triangle.fill", UIColor.systemOrangeColor, AutoACT(@"Chưa có danh sách chất lượng"),
+                      AutoACT(@"Hãy thử lại khi video đã phát"), 2.4);
+        return;
+    }
+    [labels sortUsingComparator:^NSComparisonResult(NSString *a, NSString *b) {   // độ phân giải cao ở trên cùng
+        NSInteger ra = AutoACQualityResolution(a), rb = AutoACQualityResolution(b);
+        if (ra != rb) return ra > rb ? NSOrderedAscending : NSOrderedDescending;
+        return [b compare:a options:NSNumericSearch];
+    }];
+    NSInteger start = 0;
+    NSString *videoID = AutoACCurrentVideoID();
+    if (gQualityPickedLabel && videoID && [gQualityPickedVideo isEqualToString:videoID]) {
+        NSUInteger found = [labels indexOfObject:gQualityPickedLabel];
+        if (found != NSNotFound) start = (NSInteger)found;
+    }
+    NSArray<NSString *> *rows = [labels copy];
+    AutoACShowWheel(button, rows, [NSIndexSet indexSet], start, nil, ^(NSInteger r) {   // chỉ áp dụng khi cuộn dừng hẳn
+        if (r < 0 || r >= (NSInteger)rows.count) return;
+        NSString *label = rows[(NSUInteger)r];
+        id current = AutoACObj(gPlayerVC, @[@"activeVideo"]);
+        if (AutoACApplyQualityLabel(current, label)) {
+            gQualityPickedLabel = [label copy];
+            gQualityPickedVideo = [AutoACCurrentVideoID() copy];
+            AutoACShowHub(@"checkmark.circle.fill", UIColor.systemGreenColor, label, AutoACT(@"Chất lượng"), 1.6);
+        } else {
+            AutoACShowHub(@"exclamationmark.triangle.fill", UIColor.systemOrangeColor, AutoACT(@"Không đổi được chất lượng"), @"", 2.2);
+        }
+    });
+}
+
+// ── Lặp video: lặp lại video đang xem. Chỉ áp dụng cho video hiện tại, chuyển sang video khác thì tự tắt ──
+static NSString *gLoopVideoID = nil;
+static const char kAutoACLoopArmedKey = 0;
+
+static BOOL AutoACLoopActive(void) {
+    NSString *current = AutoACCurrentVideoID();
+    return gLoopVideoID.length > 0 && current.length > 0 && [gLoopVideoID isEqualToString:current];
+}
+
+static void AutoACToggleLoop(void) {
+    NSString *current = AutoACCurrentVideoID();
+    if (current.length == 0) {
+        AutoACShowHub(@"exclamationmark.triangle.fill", UIColor.systemOrangeColor, AutoACT(@"Chưa xác định được video"), @"", 2.2);
+        return;
+    }
+    BOOL wasOn = AutoACLoopActive();
+    gLoopVideoID = wasOn ? nil : [current copy];
+    objc_setAssociatedObject(gPlayerVC, &kAutoACLoopArmedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    AutoACRefreshSleepButton();   // cũng làm mới biểu tượng nút lặp
+    AutoACShowHub(wasOn ? @"repeat" : @"repeat.1", wasOn ? UIColor.systemGrayColor : UIColor.systemGreenColor,
+                  wasOn ? AutoACT(@"Đã tắt lặp video") : AutoACT(@"Đã bật lặp video"), @"", 1.6);
+}
+
+// Gọi mỗi lần thời gian phát đổi: khi video còn ~1 giây thì hẹn giờ tua về đầu (trước khi YouTube kịp tự chuyển video)
+static void AutoACLoopTick(id player) {
+    if (gLoopVideoID.length == 0) return;
+    NSString *current = AutoACCurrentVideoID();
+    if (current.length == 0) return;
+    if (![current isEqualToString:gLoopVideoID]) {   // đã sang video khác: tắt lặp
+        gLoopVideoID = nil;
+        AutoACRefreshSleepButton();
+        return;
+    }
+    double duration = AutoACPlayerDouble(player, @[@"currentVideoTotalMediaTime", @"currentVideoTotalTime", @"currentVideoDuration", @"totalMediaTime"]);
+    if (duration <= 3) return;
+    double time = AutoACPlayerDouble(player, @[@"currentVideoMediaTime", @"currentVideoTime"]);
+    if (time < duration * 0.5) {
+        objc_setAssociatedObject(player, &kAutoACLoopArmedKey, nil, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+        return;
+    }
+    double rate = MAX(AutoACPlayerDouble(player, @[@"currentPlaybackRate", @"playbackRate", @"currentRate"]), 0.25);
+    double remaining = duration - time;
+    if (remaining > 1.4 * MAX(rate, 1.0)) return;
+    if ([objc_getAssociatedObject(player, &kAutoACLoopArmedKey) boolValue]) return;
+    objc_setAssociatedObject(player, &kAutoACLoopArmedKey, @YES, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
+    __weak id weakPlayer = player;
+    NSString *videoID = [gLoopVideoID copy];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(MAX(remaining / rate - 0.15, 0.0) * NSEC_PER_SEC)),
+                   dispatch_get_main_queue(), ^{
+        id p = weakPlayer;
+        if (!p || ![gLoopVideoID isEqualToString:videoID] || !AutoACLoopActive()) return;
+        double now = AutoACPlayerDouble(p, @[@"currentVideoMediaTime", @"currentVideoTime"]);
+        if (now > 0 && now < duration * 0.5) return;   // người xem đã tua lại
+        AutoACSeekSeconds(p, 0);
+        if ([p respondsToSelector:@selector(play)]) ((void (*)(id, SEL))objc_msgSend)(p, @selector(play));
+    });
+}
+
 // Tạo một nút công cụ từ mô tả của AutoACPlayerTools (dùng chung cho hàng trên và hàng dưới)
 static UIButton *AutoACMakeToolButton(NSDictionary *tool) {
     NSString *title = tool[@"title"];
@@ -11047,6 +11263,11 @@ static NSArray<NSDictionary *> *AutoACPlayerToolsForRow(BOOL bottomRow) {
             tap = ^(UIView *sender) { AutoACShowSleepWheel(sender); };
         }
         else if ([ident isEqualToString:@"external"]) tap = ^(UIView *sender) { AutoACShowExternalMenu(); };
+        else if ([ident isEqualToString:@"quality"]) tap = ^(UIView *sender) { AutoACShowQualityPicker(sender); };
+        else if ([ident isEqualToString:@"loop"]) {
+            symbol = AutoACLoopActive() ? @"repeat.1" : @"repeat";
+            tap = ^(UIView *sender) { AutoACToggleLoop(); };
+        }
         if (!tap) continue;
         [tools addObject:@{@"id": ident, @"title": entry[@"title"], @"symbol": symbol, @"size": @30, @"glyph": @17, @"tap": tap}];
     }
@@ -11256,6 +11477,22 @@ static void AutoACRefreshSleepButton(void) {
     for (UIButton *b in sleepButtons) {
         [b setImage:[UIImage systemImageNamed:AutoACSleepActive() ? @"moon.zzz.fill" : @"moon.zzz" withConfiguration:cfg] forState:UIControlStateNormal];
         b.tintColor = AutoACSleepActive() ? [UIColor colorWithRed:0.62 green:0.66 blue:1.0 alpha:1] : UIColor.whiteColor;
+    }
+    // nút lặp video: biểu tượng "repeat.1" và màu xanh khi đang lặp
+    NSString *loopTitle = AutoACT(@"Lặp video");
+    BOOL loopOn = AutoACLoopActive();
+    NSMutableArray<UIButton *> *loopButtons = [NSMutableArray array];
+    for (UIView *overlay in gControlsOverlays.allObjects) {
+        UIButton *b = ((NSDictionary<NSString *, UIButton *> *)objc_getAssociatedObject(overlay, &kAutoACToolsKey))[loopTitle];
+        if (b) [loopButtons addObject:b];
+    }
+    for (UIView *bar in gBottomBars.allObjects) {
+        UIButton *b = ((NSDictionary<NSString *, UIButton *> *)objc_getAssociatedObject(bar, kAutoACBottomToolsKey))[loopTitle];
+        if (b) [loopButtons addObject:b];
+    }
+    for (UIButton *b in loopButtons) {
+        [b setImage:[UIImage systemImageNamed:loopOn ? @"repeat.1" : @"repeat" withConfiguration:cfg] forState:UIControlStateNormal];
+        b.tintColor = loopOn ? [UIColor colorWithRed:0.45 green:0.92 blue:0.55 alpha:1] : UIColor.whiteColor;
     }
 }
 
@@ -11769,6 +12006,7 @@ static void AutoACInstallFeatureHooks(void) {
                 { static BOOL once; if (!once) { once = YES; AutoACTrace("first time tick"); } }
                 [[AutoACPiP shared] stopForYouTube];
                 if ([kPrefs boolForKey:kShortsNoLoopKey]) AutoACShortsTick(self_);
+                AutoACLoopTick(self_);
                 if (!gSponsorSegments) return;
                 static CFTimeInterval lastEval = 0;   // không cần kiểm tra SponsorBlock ở mọi nhịp thời gian (đoạn bỏ qua cách mép 0,4 giây)
                 CFTimeInterval nowT = CACurrentMediaTime();
@@ -11837,7 +12075,7 @@ static void AutoACInstallFeatureHooks(void) {
     }
     [kPrefs registerDefaults:@{kAutoClearCacheKey: @YES, kYTXAdsKey: @YES, kYTXBackgroundKey: @YES,
                                                               kAskQualityKey: @YES, kShareAfterKey: @YES,
-                               kAskDestKey: @YES, kHidePromosKey: @YES, kHidePaidPromoKey: @YES, kHideMusicPremiumKey: @YES, kShortsFullBleedKey: @YES, kGlassTopKey: @YES, kGlassSheetKey: @YES, kGlassPlayerKey: @YES, kSponsorAlertKey: @YES,
+                               kAskDestKey: @YES, kHidePromosKey: @YES, kHidePaidPromoKey: @YES, kShortsFullBleedKey: @YES, kGlassTopKey: @YES, kGlassSheetKey: @YES, kGlassPlayerKey: @YES, kSponsorAlertKey: @YES,
                                kDiagKey: @YES, kPlayerButtonKey: @YES, kCommentToolsKey: @YES, kPostImageKey: @YES, kPlayerFloatKey: @YES, kPlayerSpeedBtnKey: @YES, kPlayerPiPKey: @YES, kPlayerSleepBtnKey: @YES, kPlayerExternalKey: @YES, kShortsNoLoopKey: @YES}];
     [kPrefs removeObjectForKey:@"ACG.Preference.Tabs.ShortsDarkOff"];   // 2.1.66-2.1.68: công tắc Dock tối ở Short đã bỏ
     AutoACOverlayMigrateLegacy();   // 2.1.64: hai công tắc hàng trên/hàng dưới → Tuỳ chỉnh Overlay
@@ -12000,7 +12238,7 @@ static NSDictionary<NSString *, NSString *> *AutoACEnglishTable(void) {
         @"Chưa nhận diện được video": @"Video not recognized",
         @"Chạm nút Tải xuống gốc của YouTube (hàng nút dưới video) sẽ mở bảng tải của AutoAC thay cho bảng của YouTube. Có thể bật cùng Nút icon tải khi cần.": @"Tapping YouTube's own Download button (the row under the video) opens the AutoAC download sheet instead of YouTube's. Can be combined with the Download icon button.",
         @"Chất lượng video": @"Video quality",
-        @"Chặn popup mời mua Premium": @"Block Premium upsell popups",
+        @"Chặn popup và thẻ mời Premium": @"Block Premium popups and upsell cards",
         @"Chặn quảng cáo": @"Block ads",
         @"Chặn quảng cáo trong video, trang chủ và Shorts (YouTube X). Cần mở lại app.": @"Blocks ads in videos, the home feed and Shorts (YouTube X). Restart the app to apply.",
         @"Chỉ chữ": @"Text only",
@@ -12097,6 +12335,14 @@ static NSDictionary<NSString *, NSString *> *AutoACEnglishTable(void) {
         @"Phát bằng": @"Play with",
         @"Phát lại": @"Playback",
         @"Phát ngoài": @"Play externally",
+        @"Chất lượng": @"Quality",
+        @"Lặp video": @"Loop video",
+        @"Chưa có danh sách chất lượng": @"No quality list yet",
+        @"Hãy thử lại khi video đã phát": @"Try again once the video is playing",
+        @"Không đổi được chất lượng": @"Could not change quality",
+        @"Chưa xác định được video": @"Could not identify the video",
+        @"Đã bật lặp video": @"Loop on",
+        @"Đã tắt lặp video": @"Loop off",
         @"Phát nền": @"Background play",
         @"Phần không phải nhạc": @"Non-music section",
         @"Phụ đề": @"Subtitles",
@@ -12282,7 +12528,7 @@ static NSDictionary<NSString *, NSString *> *AutoACEnglishTable(void) {
         @"Ẩn nhãn trả phí": @"Hide paid-promotion label",
         @"Có quảng cáo trả phí": @"Includes paid promotion",
         @"Ẩn nhãn \"Có quảng cáo trả phí\" hiện trên trình phát khi video có nội dung được tài trợ. Chỉ ẩn nhãn, không chặn nội dung của video.": @"Hides the \"Includes paid promotion\" label shown on the player when a video has sponsored content. It only hides the label; it does not block the video's content.",
-        @"No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium. Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app.": @"No premium: blocks the popups, suggestion bars and dialogs that invite you to try or buy YouTube Premium. When the build includes NoYTPremium, this switch also turns that part on and off (survey blocking, the trial entry in settings). Requires reopening the app.",
+        @"No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium, đồng thời gỡ khỏi bảng tin các thẻ mời dùng thử hoặc mua YouTube Music Premium (không để lại khoảng trống). Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app.": @"No premium: blocks the popups, suggestion bars and dialogs that invite you to try or buy YouTube Premium, and also removes cards inviting you to try or buy YouTube Music Premium from the feed (leaving no gap). When the build includes NoYTPremium, this switch also turns that part on and off (survey blocking, the trial entry in settings). Requires restarting the app.",
         @"Cạnh nút toàn màn hình": @"Next to the fullscreen button",
         @"Chạm lần nữa để khôi phục tab": @"Tap again to restore tabs",
         @"Đã khôi phục tab mặc định": @"Default tabs restored",
@@ -12295,8 +12541,6 @@ static NSDictionary<NSString *, NSString *> *AutoACEnglishTable(void) {
         @"Cảnh xem trước, tóm tắt": @"Previews and recaps",
         @"Đoạn nói trong video nhạc": @"Talking in music videos",
         @"Đoạn lan man, ít quan trọng": @"Tangents and low-value filler",
-        @"CHUNG": @"GENERAL",
-        @"Thanh tab": @"Tab bar",
         @"Xem sau": @"Watch later",
         @"Theo YouTube": @"Follow YouTube",
         @"Tuỳ chỉnh Overlay": @"Customize overlay",
@@ -12310,24 +12554,17 @@ static NSDictionary<NSString *, NSString *> *AutoACEnglishTable(void) {
         @"HÀNG DƯỚI": @"BOTTOM ROW",
         @"ĐANG TẮT": @"OFF",
         @"Kéo nút vào đây": @"Drag a button here",
-        @"Chặn Music Premium": @"Block Music Premium",
-        @"Thẻ mời dùng thử trong bảng tin": @"Trial banners in the feed",
-        @"Ẩn thẻ mời dùng thử hoặc mua YouTube Music Premium (và các thẻ mời nâng cấp tương tự) hiện giữa bảng tin. Thẻ được gỡ khỏi danh sách nên không để lại khoảng trống. Cần mở lại app. Popup mời mua Premium do công tắc No premium lo.": @"Hides cards inviting you to try or buy YouTube Music Premium (and similar upgrade cards) shown in the feed. Cards are removed from the list, so no gap is left. Requires restarting the app. Premium purchase popups are handled by the No premium switch.",
         @"End": @"End",
         @"Dừng khi hết video": @"Stops when the video ends",
         @"Hết video": @"Video ended",
         @"Shorts tràn xuống thanh tab": @"Shorts fill down to the tab bar",
         @"Dock trong suốt, không dải trắng/đen": @"Transparent dock, no white/black strip",
-        @"Ở tab Shorts, nền dưới video và thanh tab trong suốt (không trắng, không đen) và video kéo xuống tận thanh tab như các tab khác. Thử nghiệm: nếu Shorts bị lệch hoặc cuộn giật, tắt công tắc này. Chỉ có tác dụng khi thanh tab ở chế độ kính lỏng.": @"On the Shorts tab, the area under the video and the tab bar are transparent (not white, not black) and the video extends down to the tab bar like on the other tabs. Experimental: if Shorts looks misaligned or scrolls with stutter, turn this switch off. Only works when the tab bar is in liquid-glass mode.",
         @"Kính lỏng thanh trên": @"Liquid glass top bar",
         @"Nút tìm kiếm, thông báo, quay lại": @"Search, notifications and back buttons",
-        @"Đặt nền kính lỏng sau cụm nút bên phải của thanh trên (tìm kiếm, thông báo…) và nút nhỏ bên trái như nút quay lại. Cần iOS 26 trở lên. Ý tưởng theo ytkace (MIT).": @"Puts a liquid-glass background behind the right-hand button group of the top bar (search, notifications…) and the small left button such as Back. Requires iOS 26 or later. Idea based on ytkace (MIT).",
         @"Kính lỏng bảng chọn": @"Liquid glass sheets",
         @"Bảng, menu và hộp thoại": @"Sheets, menus and dialogs",
-        @"Thay nền đặc của bảng chọn đáy màn hình, menu ngữ cảnh và hộp thoại bằng kính lỏng. Cần iOS 26 trở lên. Nếu chữ khó đọc hoặc bảng bị lệch, tắt công tắc này.": @"Replaces the solid background of bottom sheets, context menus and dialogs with liquid glass. Requires iOS 26 or later. If text is hard to read or a sheet looks misaligned, turn this switch off.",
         @"Kính lỏng trình phát": @"Liquid glass player",
         @"Nút nổi trên video": @"Floating buttons on the video",
-        @"Đổi nền mờ của các nút nổi trong trình phát (YTFrostedGlassView) sang kính lỏng. Cần iOS 26 trở lên.": @"Turns the blurred backgrounds of the floating player buttons (YTFrostedGlassView) into liquid glass. Requires iOS 26 or later.",
         @"Hiện": @"Show",
         @"Ẩn": @"Hide",
         @"Không hiện trên thanh tab": @"Not shown on the tab bar",
