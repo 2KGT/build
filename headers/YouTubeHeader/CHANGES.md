@@ -1,0 +1,106 @@
+# Thay đổi dump · YouTubeHeader
+
+- Phiên bản app: **21.38.3 → 21.45.4**
+- Class: **+1124** mới · **−678** mất
+- Selector (trong class còn tồn tại): **+10674** · **−2342**
+- Dự án có hook dùng dump này: `AutoAC`, `Liquid`, `YTLite`, `Yomost`, `YouMod`
+
+## 🪝 Hook của bạn
+- ✅ 368 khớp · ⚠️ 15 có vấn đề · ℹ️ 134 chưa kiểm chứng được
+- ⚠️ `-setBackgroundColor:` trên `YTPivotBarView` đã biến mất → gợi ý: `-setBackgroundStyle:` (0.5) `Tweak.x:1094`
+- ⚠️ class `YTAdsInnerTubeContextDecorator` không còn trong dump → ứng viên (cần xem lại): `YTAdsInnerTubeContextDecoratorImpl` (0.685); `YTELMInnerTubeContextDecoratorImpl` (0.6); `YTUserAuthenticator` (0.55) `Ads.x:105`
+- ⚠️ `-decorateContext:` trên `YTAccountScopedAdsInnerTubeContextDecorator` đã biến mất → gợi ý: `-decorateContextWithIDFA:` (0.5) `Ads.x:109`
+- ⚠️ `-decorateContext:` trên `YTAccountScopedAdsInnerTubeContextDecorator` đã biến mất → gợi ý: `-decorateContextWithIDFA:` (0.5) `Ads.x:343`
+- ⚠️ class `YTPersonalizedSuggestionsCacheProvider` không còn trong dump → ứng viên (cần xem lại): `YTPersonalizedSuggestionsCacheProviderImpl` (0.628) `Feed.x:123`
+- ⚠️ `-shortsPlayerGlobalConfigEnableReelsPictureInPicture` trên `YTColdConfig` đã biến mất `Others.x:31`
+- ⚠️ `-shortsPlayerGlobalConfigEnableReelsPictureInPictureIos` trên `YTColdConfig` đã biến mất `Others.x:32`
+- ⚠️ `-iosEnableSimplerTitleInShortsVideoQualityPicker` trên `YTHotConfig` đã biến mất → gợi ý: `-enableShortsVideoQualityPicker` (0.556); `-androidEnableShortsSimplerVideoQualityPickerMenu` (0.545); `-iosEnableShortsPlayerVideoQuality` (0.5) `Shorts.x:10`
+- ⚠️ `-decorateContext:` trên `YTAccountScopedAdsInnerTubeContextDecorator` đã biến mất → gợi ý: `-decorateContextWithIDFA:` (0.5) `Ads.x:109`
+- ⚠️ `-shortsPlayerGlobalConfigEnableReelsPictureInPicture` trên `YTColdConfig` đã biến mất `Others.x:31`
+- ⚠️ `-shortsPlayerGlobalConfigEnableReelsPictureInPictureIos` trên `YTColdConfig` đã biến mất `Others.x:32`
+- ⚠️ `-iosEnableSimplerTitleInShortsVideoQualityPicker` trên `YTHotConfig` đã biến mất → gợi ý: `-enableShortsVideoQualityPicker` (0.556); `-androidEnableShortsSimplerVideoQualityPickerMenu` (0.545); `-iosEnableShortsPlayerVideoQuality` (0.5) `Shorts.x:10`
+
+## Class mất (tối đa 40)
+- `APMPlatformIdentitySupport`
+- `ASWAppSwitchingSKOverlayFeatureMode`
+- `ASWChromeDefaultPromoAnalyticsService`
+- `ASWCollectionViewCell`
+- `ASWCollectionViewTextCell`
+- `ASWLoadingCell`
+- `ASWWebProduct`
+- `CADPAndroidClientInfo`
+- `CADPAndroidClientInfo_ExtensionVersion`
+- `CADPAndroidDeviceType`
+- `CADPBattlestarClientInfo`
+- `CADPBirdsongClientInfo`
+- `CADPBrowserInfo`
+- `CADPDesktopServicesClientInfo`
+- `CADPDriveDesktopClientInfo`
+- `CADPG1DesktopClientInfo`
+- `CADPGoogleHomeClientInfo`
+- `CADPJsClientInfo`
+- `CADPJsClientInfo_FlushInfo`
+- `CADPJsClientInfo_UserAgentClientHints`
+- `CADPJsClientInfo_UserAgentClientHints_BrandAndVersion`
+- `CADPKaiosClientInfo`
+- `CADPMacClientInfo`
+- `CADPNearbyClientInfo`
+- `CADPNearbyDesktopClientInfo`
+- `CADPNearbyDesktopClientInfo_MacOSDeviceInfo`
+- `CADPNearbyDesktopClientInfo_NearbyDesktopBluetoothInfo`
+- `CADPNearbyDesktopClientInfo_NearbyDesktopDriverInfo`
+- `CADPNearbyDesktopClientInfo_WindowsDeviceInfo`
+- `CADPNestcamPhotonClientInfo`
+- `CADPPancettaClientInfo`
+- `CADPPlayCeClientInfo`
+- `CADPPortablePhenotypeLibraryClientInfo`
+- `CADPSparklightClientInfo`
+- `CADPVrClientInfo`
+- `CADPWgaClientInfo`
+- `CADPWgaClientInfo_OsVersion`
+- `CADPWgaClientInfo_WebView2Version`
+- `CADPWindowsClientInfo`
+- `CADPWindowsClientInfo_BluetoothInfo`
+
+## Class mới (tối đa 40)
+- `ALKApiKeyCredential`
+- `ALKClientCredentialsCredential`
+- `ALKConsentData`
+- `ALKFinishConsentRequest`
+- `ALKFinishConsentResponse`
+- `ALKGuestModeCredential`
+- `ALKLinkingSession_UniversalLinkingDetails`
+- `ALKPApiKeyConfig`
+- `ASMAccountsBridgeImpl`
+- `ASMChatRequest`
+- `ASMChatResponse`
+- `ASMGetAccountAttributesRequest`
+- `ASMGetAccountAttributesResponse`
+- `ASMWelcomeScreenIntro_ConnectedAccountInfo`
+- `DUIWrappingButtonView`
+- `ELMCSSLinearGradient`
+- `ELMCSSRadialCGGradientWrapper`
+- `ELMCompositeGradient`
+- `ELMElementsRuntimeMetadataSource`
+- `ELMExecuteJSFunctionCommandHandler`
+- `ELMNCommandGestureContext`
+- `ELMNCommandPropertiesGestureHandler`
+- `ELMNContextClickGestureRecognizer`
+- `ELMNDoubleTapGestureRecognizer`
+- `ELMNHoverGestureRecognizer`
+- `ELMNLegacyCommandSender`
+- `ELMNLongPressGestureRecognizer`
+- `ELMNPanGestureRecognizer`
+- `ELMNPinchGestureRecognizer`
+- `ELMNRotationGestureRecognizer`
+- `ELMNScrollDisplayLinkTarget`
+- `ELMNSelectableTextNodeView`
+- `ELMNTapGestureRecognizer`
+- `ELMNTouchDownUpGestureRecognizer`
+- `ELMPBElementsErrorAttribution`
+- `ELMPBGetFinalClientAssetArgs`
+- `ELMPBGetFinalClientAssetResult`
+- `ELMPBHeaderContent`
+- `ELMPBLogLatencyTickOptions`
+- `ELMPBMutateCreationOutput`
+

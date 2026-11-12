@@ -1,0 +1,387 @@
+# version: 2.2.0 | 2026-11-06 | job hookcheck chạy SONG SONG với build và tự gọi Hook-Fix khi hook hỏng; plan nhẹ hơn (checkout blobless/shallow); push đổi file Logos cũng build
+name: "Build Multi Tweaks vip"
+
+# ┌─ BẢNG CẤU HÌNH (thứ tự hiển thị trên GitHub) ──────────────────────────────
+# │ 1. BUILD   : project (mặc định None = chặn chạy nhầm), ver_type, clean_build
+# │ 2. PHÁT HÀNH: publish (repo Sileo), send_deb (Telegram)
+# │ 3. DỌN DẸP : run_clean_theos, run_clean_logs, clean_delay_seconds  (chỉ chạy khi bấm tay)
+# └─ Push file <Dự án>/control => tự build MỌI dự án có control đổi (song song), tuỳ chọn lấy mặc định
+#    Bấm tay: luôn phải chọn đúng 1 dự án (không có chế độ build tất cả)
+on:
+  workflow_dispatch:
+    inputs:
+      project:
+        description: '📦 Dự án (None = chưa chọn, sẽ dừng)'
+        required: true
+        type: choice
+        default: 'None'
+        options: [ 'None', AutoAC, AutoDL, BiliBili, Facebook, Liquid, Yomost, YouMod, YTLite ]
+
+      ver_type:
+        description: '🔢 Nâng version'
+        type: choice
+        default: 'Patch (Vá lỗi)'
+        options: [ 'Patch (Vá lỗi)', 'Minor (Tính năng)', 'Major (Đại tu)', 'Giữ nguyên' ]
+      clean_build:
+        description: '🧼 make clean trước khi build'
+        type: boolean
+        default: true
+
+      publish:
+        description: '🚀 Đẩy lên repo Sileo'
+        type: boolean
+        default: false
+      send_deb:
+        description: '🤖 Gửi .deb qua Telegram'
+        type: boolean
+        default: true
+
+      run_clean_theos:
+        description: '🧹 Dọn: gỡ ghost submodule theos'
+        type: boolean
+        default: false
+      run_clean_logs:
+        description: '🗑️ Dọn: reset commit + xoá runs & cache'
+        type: boolean
+        default: false
+      clean_delay_seconds:
+        description: '⏱️ Chờ trước khi dọn (giây)'
+        type: number
+        default: 90
+
+  push:
+    paths:
+      - '**/control'
+      - '**/*.x'        # sửa file Logos (kể cả PR sửa hook do Hook-Fix tạo) cũng tự build lại
+      - '**/*.xm'
+      - '**/*.xi'
+      - '**/*.xmi'
+
+env:
+  TZ: "Asia/Ho_Chi_Minh"
+  THEOS: ${{ github.workspace }}/theos_engine
+
+# Xếp hàng thay vì chạy song song: tránh 2 lần build cùng rebase/push lên một nhánh
+concurrency:
+  group: tweaks-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ════════════════════════════════════════════════════════════════
+  # JOB 1 — PLAN: quyết định build dự án nào (nhẹ, chạy trên Ubuntu)
+  # ════════════════════════════════════════════════════════════════
+  plan:
+    name: 🗺️ Lập kế hoạch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.plan.outputs.matrix }}
+      count: ${{ steps.plan.outputs.count }}
+    steps:
+      - name: 📥 Checkout nhẹ (chạy tay lấy 1 commit; push lấy lịch sử không kèm nội dung file)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: ${{ github.event_name == 'push' && 0 || 1 }}
+          filter: blob:none
+
+      - name: 🗺️ Xác định dự án cần build (plan.py)
+        id: plan
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          MANUAL_PROJECT: ${{ github.event.inputs.project }}
+          BEFORE_SHA: ${{ github.event.before }}
+        run: python3 .github/scripts/plan.py
+
+      - name: 📢 Báo Telegram khi không lập được kế hoạch
+        if: failure()
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+          JOB_STATUS: failure
+          PROJECT_NAME: ${{ github.event.inputs.project || 'Unknown' }}
+          SEND_DEB: 'false'
+        run: |
+          pip3 install requests --break-system-packages
+          python3 .github/scripts/tgbot.py || true
+
+  # ════════════════════════════════════════════════════════════════
+  # JOB 1b — HOOKCHECK: chạy SONG SONG với forge, không chặn build
+  #   • Hook hỏng và chưa có PR chờ duyệt → tự gọi Hook-Fix (mở PR để bạn duyệt)
+  #   • Đã có PR → chỉ nhắc, không tạo thêm
+  # ════════════════════════════════════════════════════════════════
+  hookcheck:
+    name: 🪝 Kiểm tra hook
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true      # công cụ cảnh báo, không làm đỏ workflow
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: write             # để gọi Hook-Fix.yml
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: 📥 Checkout (đủ lịch sử để dựng fingerprint, không kèm nội dung file cũ)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: 🪝 Đối chiếu hook với header đã dump
+        id: check
+        env:
+          MATRIX: ${{ needs.plan.outputs.matrix }}
+        run: python3 .github/scripts/hooks.py check-all --matrix "$MATRIX"
+
+      - name: 🔧 Gọi Hook-Fix cho dump có hook hỏng (nếu chưa có PR chờ duyệt)
+        if: steps.check.outputs.broken != '' && steps.check.outputs.broken != '0'
+        env:
+          BROKEN_DUMPS: ${{ steps.check.outputs.broken_dumps }}
+        run: |
+          # Không gọi lại khi đang chạy trên nhánh sửa hook (tránh vòng lặp PR chồng PR)
+          case "$GITHUB_REF_NAME" in hookfix/*) echo "ℹ️ Đang ở nhánh $GITHUB_REF_NAME — không gọi Hook-Fix lại."; exit 0 ;; esac
+          OPEN=$(gh pr list --state open --json headRefName --jq '.[].headRefName' || true)
+          IFS=',' read -ra DUMPS <<< "$BROKEN_DUMPS"
+          for d in "${DUMPS[@]}"; do
+            if printf '%s\n' "$OPEN" | grep -q "^hookfix/${d}-"; then
+              echo "⏳ $d: đã có PR sửa hook chờ duyệt."
+              echo "- ⏳ \`$d\`: đã có PR sửa hook đang chờ bạn duyệt" >> "$GITHUB_STEP_SUMMARY"
+            else
+              gh workflow run Hook-Fix.yml --ref "$GITHUB_REF_NAME" -f dump="$d" -f dry_run=false \
+                && echo "- 🔧 \`$d\`: đã gọi Hook-Fix, PR sẽ xuất hiện trong ít phút" >> "$GITHUB_STEP_SUMMARY" \
+                || echo "::warning::Không gọi được Hook-Fix cho $d"
+            fi
+          done
+
+  # ════════════════════════════════════════════════════════════════
+  # JOB 2 — FORGE: build từng dự án (matrix, mỗi dự án một runner macOS)
+  # ════════════════════════════════════════════════════════════════
+  forge:
+    name: 🔨 Build ${{ matrix.project }}
+    needs: plan
+    if: needs.plan.outputs.count != '0'
+    runs-on: macos-latest
+    timeout-minutes: 60
+    permissions:
+      contents: write
+      actions: write
+    strategy:
+      fail-fast: false        # một dự án lỗi không làm dừng các dự án khác
+      max-parallel: 2         # giới hạn số runner macOS chạy cùng lúc
+      matrix: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    env:
+      INPUT_PROJECT: ${{ matrix.project }}   # build_engine.py đọc
+      PROJECT_NAME: ${{ matrix.project }}    # tgbot.py đọc
+    steps:
+
+      # 1. Kiểm tra đầu vào và khởi tạo hệ thống
+      - name: 📥 1.1 Checkout Source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: 🛠️ 1.4 Cài đặt Hệ thống Theos (Always run)
+        run: |
+          brew update
+          brew install make ldid dpkg
+          # Theos cần GNU make 4+; macOS chỉ có make 3.81 nên đưa gnubin lên đầu PATH
+          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
+
+      - name: 🛠️ 1.5 Setup Theos Engine (Cache)
+        id: cache-theos
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.THEOS }}
+          key: theos-engine-${{ runner.os }}
+
+      - name: ⌛️ 1.6 Clone Theos (cache miss)
+        if: steps.cache-theos.outputs.cache-hit != 'true'
+        run: |
+          git clone --recursive https://github.com/theos/theos.git $THEOS
+          mkdir -p $THEOS/sdks
+          curl -L https://github.com/theos/sdks/archive/master.tar.gz | tar -xz --strip-components=1 -C $THEOS/sdks
+
+      # 2. Tự động Biên Dịch (Build Engine)
+      - name: 🚎 2.1 Tự động Biên Dịch (Build Engine)
+        id: python_build
+        env:
+          INPUT_VER_TYPE: ${{ github.event.inputs.ver_type }}
+          INPUT_CLEAN_BUILD: ${{ github.event.inputs.clean_build || 'true' }}
+          INPUT_PUBLISH: ${{ github.event.inputs.publish || 'false' }}
+          INPUT_SEND_DEB: ${{ github.event.inputs.send_deb || 'true' }}
+        run: |
+          export THEOS=${{ env.THEOS }}
+          python3 -u .github/scripts/build_engine.py
+
+      - name: 📝 2.2 Tổng kết & Phân tích lỗi
+        if: always()
+        run: |
+          if [ "${{ steps.python_build.outcome }}" == "success" ]; then
+            echo "## ✅ Build thành công: ${{ steps.python_build.outputs.display_name }}" >> $GITHUB_STEP_SUMMARY
+            if [ "${{ steps.python_build.outputs.bumped }}" == "true" ]; then
+              echo "Phiên bản: **v${{ steps.python_build.outputs.old_ver }} → v${{ steps.python_build.outputs.final_ver }}**" >> $GITHUB_STEP_SUMMARY
+            else
+              echo "Phiên bản: **v${{ steps.python_build.outputs.final_ver }}** (giữ nguyên)" >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "## ❌ Build thất bại" >> $GITHUB_STEP_SUMMARY
+            echo "### Phân tích lỗi nhanh:" >> $GITHUB_STEP_SUMMARY
+            echo '```bash' >> $GITHUB_STEP_SUMMARY
+            # Tự động trích xuất các dòng lỗi từ log build
+            if [ -s .github/scripts/build.log ]; then
+              grep -iE "error|fatal|warning|ld:|make:" .github/scripts/build.log | tail -n 20 >> $GITHUB_STEP_SUMMARY || true
+            else
+              echo "Không có log build (lỗi xảy ra trước khi biên dịch)." >> $GITHUB_STEP_SUMMARY
+            fi
+            echo '```' >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # 2.3 Lưu version mới, CHANGELOG.md và danh sách giấy phép của dự án lên repo (khi build thành công)
+      - name: 🔖 2.3 Lưu version & nhật ký build vào repo
+        if: success()
+        env:
+          PROJ: ${{ steps.python_build.outputs.display_name }}
+          FINAL_VER: ${{ steps.python_build.outputs.final_ver }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          for f in control CHANGELOG.md THIRD_PARTY_LICENSES.md; do
+            git add -A -- "$PROJ/$f" 2>/dev/null || true
+          done
+          git commit -m "🔖 $PROJ v$FINAL_VER [skip ci]" || { echo "Không có thay đổi để commit."; exit 0; }
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push && exit 0
+            echo "⚠️ Push lần $i thất bại, thử lại..."; sleep 3
+          done
+          exit 1
+
+      # 3. Lưu trữ Artifacts (để tải về từ GitHub)
+      - name: 🧾 3.0 Lưu nhật ký build (chạy cả khi build lỗi)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-${{ matrix.project }}
+          path: .github/scripts/build*.log
+          if-no-files-found: ignore
+
+      - name: 📦 3.1 Upload Artifacts
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tweak-release-${{ matrix.project }}
+          path: output/
+          if-no-files-found: warn
+
+      # 4. Sync lên Repo Sileo (nếu cần)
+      - name: ♻️ 4.1 Sync & Release
+        if: success() && github.event.inputs.publish == 'true' && steps.python_build.outputs.has_deb == 'true'
+        env:
+          REPO_TOKEN: ${{ secrets.REPO_TOKEN }}
+          SYNC_NAME: ${{ steps.python_build.outputs.display_name }}
+          SYNC_VER: ${{ steps.python_build.outputs.final_ver }}
+        run: |
+          # 1. Clone repo đích
+          git clone "https://x-access-token:${REPO_TOKEN}@github.com/2KGT/repo.git" public_repo_target
+
+          shopt -s nullglob
+
+          # 2. Vòng lặp quét tất cả các file .deb trong thư mục output
+          for file in output/*.deb; do
+            filename=$(basename "$file")
+
+            # Tách Bundle ID gốc (phần trước dấu _ đầu tiên)
+            bundle_id=$(echo "$filename" | cut -d'_' -f1)
+
+            # Tên thư mục ngắn gọn: lấy phần cuối của Bundle ID
+            # Muốn giữ nguyên dạng đầy đủ thì đổi thành: tweak_folder=$bundle_id
+            tweak_folder=$(echo "$bundle_id" | awk -F'.' '{print $NF}')
+
+            target_dir="public_repo_target/repo/debs/$tweak_folder"
+            mkdir -p "$target_dir"
+
+            cp "$file" "$target_dir/"
+            echo "✅ Đã copy file deb $filename vào $target_dir"
+          done
+
+          # 3. Commit và push
+          cd public_repo_target
+          git config user.name "github-actions[bot]"
+          git config user.email "actions@github.com"
+
+          git add repo/
+          if git diff-index --quiet HEAD --; then
+            echo "ℹ️ Không có thay đổi nào mới để cập nhật."
+          else
+            git commit -m "🚀 [Auto Sync] $SYNC_NAME v$SYNC_VER"
+            # Nhiều dự án build song song cùng đẩy lên repo Sileo => rebase rồi thử lại
+            for i in 1 2 3 4; do
+              git pull --rebase --autostash origin main && git push origin main && exit 0
+              echo "⚠️ Push Sileo lần $i thất bại, thử lại..."; sleep $((i * 3))
+            done
+            exit 1
+          fi
+
+      # 5. Gửi Thông Báo Trạng Thái Luồng Telegram bot
+      - name: 📢 5.1 Gửi Thông Báo Trạng Thái Luồng
+        if: always()
+        env:
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+          JOB_STATUS: ${{ job.status }}
+          SEND_DEB: ${{ github.event.inputs.send_deb || 'true' }}
+        run: |
+          if [ -f "./.github/scripts/tgbot.py" ]; then
+             # Sửa lỗi externally-managed-environment bằng cờ --break-system-packages
+             pip3 install requests --break-system-packages
+             python3 ./.github/scripts/tgbot.py
+          fi
+
+  # ════════════════════════════════════════════════════════════════
+  # JOB 3 — CLEANUP: chờ cloud rồi dọn dẹp (chỉ khi bấm tay + có tick + mọi build thành công)
+  # Telegram của giai đoạn này gửi bên trong clean.py → tgbot.notify_clean()
+  # ════════════════════════════════════════════════════════════════
+  cleanup:
+    name: 🧹 Dọn dẹp
+    needs: [plan, forge]
+    if: >
+      always() && github.event_name == 'workflow_dispatch' &&
+      needs.forge.result == 'success' &&
+      (inputs.run_clean_theos == true || inputs.run_clean_logs == true)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "⏳ Chờ cloud xử lý xong trước khi dọn dẹp"
+        env:
+          DELAY: ${{ inputs.clean_delay_seconds }}
+        run: |
+          DELAY="${DELAY:-90}"
+          echo "⏱️  Chờ ${DELAY}s để cloud hoàn tất xử lý dữ liệu..."
+          for i in $(seq "$DELAY" -10 1); do
+            echo "   ⏳ Còn ${i}s..."
+            sleep 10
+          done
+          echo "✅ Bắt đầu dọn dẹp!"
+
+      - name: "🧹🗑️ Dọn dẹp repo (clean.py)"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_CLEAN_THEOS: ${{ inputs.run_clean_theos }}
+          RUN_CLEAN_LOGS: ${{ inputs.run_clean_logs }}
+          TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}
+          TELEGRAM_TO: ${{ secrets.TELEGRAM_TO }}
+        run: |
+          pip3 install requests --break-system-packages
+          python3 .github/scripts/clean.py

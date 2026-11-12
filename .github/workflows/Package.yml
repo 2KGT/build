@@ -1,0 +1,335 @@
+# version: 3.1.0 | 2026-11-06 | ô Bộ tweak liệt kê thẳng dự án của bạn (tự thành repo:Tên), bỏ YTLite của tác giả; gói preset:video/ui/khac; tweak bên thứ ba lỗi thì bỏ qua (strict=1 để dừng) | cần package_engine.py >= 2.2.0
+name: Build Multi & Ký IPA
+
+# Tên mỗi lần chạy hiện rõ trong danh sách Actions (đỡ phải mở từng cái)
+run-name: ${{ inputs.preset }} → ${{ inputs.output }} · ${{ inputs.sign }}
+
+# ┌─ CÁCH ĐIỀN FORM: đi từ 1 xuống 5, bước 6 và hai nút cuối có thể bỏ qua ──────
+# │ 1 Bộ tweak      một dự án của bạn (AutoAC, YouMod...) · YouMod đầy đủ · Chỉ ký lại IPA · Tự chọn
+# │ 2 Thêm/bớt      để trống nếu bộ ở bước 1 đã đủ. Cú pháp (cách nhau dấu cách):
+# │                   ryd youpip        thêm tweak trong tweaks.catalog.json
+# │                   preset:video      thêm cả gói (video · ui · khac)
+# │                   -volboost         BỚT một tweak khỏi bộ đã chọn
+# │                   repo:YouMod       .deb tweaks.yml đã build (chưa có thì tự biên dịch)
+# │                   https://…/x.deb   link .deb / .dylib / .zip
+# │                   file:debs/x.deb   file nằm sẵn trong repo
+# │ 3 Link IPA      chỉ cần khi Đầu ra có IPA
+# │ 4 Đầu ra        IPA · .cyan · TrollFools · DEB + dylib · Tất cả
+# │ 5 Ký            Không ký · Ký giả (ldid) · Ký chứng chỉ (p12)
+# │ 6 Tuỳ chọn khác (tuỳ chọn) name="YouTube Plus" bundle=com.x.y flags=-uwe ent=path/ent.plist strict=1
+# │                 — bỏ trống = giữ nguyên tên/bundle gốc, cờ cyan -uwe, tweak bên thứ ba lỗi thì bỏ qua
+# │                 — strict=1 = dừng ngay khi bất kỳ tweak nào lỗi
+# │
+# │ Dự án của bạn lỗi → luôn dừng. Tweak bên thứ ba lỗi → bỏ qua, báo trong tóm tắt.
+# │ Thêm dự án mới vào danh sách chọn: sửa dòng options của input 'preset' bên dưới
+# │   (chưa thêm thì vẫn dùng được: gõ repo:Tên ở bước 2; Lập kế hoạch sẽ nhắc).# │
+# │ Ký giả       → TrollStore, TrollFools, jailbreak. Không cần secret.
+# │ Ký chứng chỉ → cài thường (sideload). Cần 3 secret: SIGN_P12_BASE64,
+# │                SIGN_P12_PASSWORD, SIGN_PROFILE_BASE64.
+# │ Muốn thử không tốn macOS: bật "Chỉ xem kế hoạch".
+# └─────────────────────────────────────────────────────────────────────────────
+on:
+  workflow_dispatch:
+    inputs:
+      preset:
+        description: '1️⃣ Bộ tweak'
+        type: choice
+        default: '(chưa chọn)'
+        options: [ '(chưa chọn)', 'AutoAC', 'AutoDL', 'BiliBili', 'Facebook', 'Liquid', 'Yomost', 'YouMod', 'YTLite', 'YouMod đầy đủ', 'Chỉ ký lại IPA', 'Tự chọn' ]
+      extra:
+        description: '2️⃣ Thêm / bớt tweak'
+        required: false
+        type: string
+      ipa_url:
+        description: '3️⃣ Link IPA'
+        required: false
+        type: string
+      output:
+        description: '4️⃣ Đầu ra'
+        type: choice
+        default: 'IPA'
+        options: [ 'IPA', '.cyan', 'TrollFools', 'DEB + dylib', 'Tất cả' ]
+      sign:
+        description: '5️⃣ Ký'
+        type: choice
+        default: 'Không ký'
+        options: [ 'Không ký', 'Ký giả (ldid)', 'Ký chứng chỉ (p12)' ]
+      options:
+        description: '6️⃣ Tuỳ chọn khác'
+        required: false
+        type: string
+
+      release:
+        description: '🚀 Release nháp'
+        type: boolean
+        default: true
+      dry_run:
+        description: '🔍 Chỉ xem kế hoạch'
+        type: boolean
+        default: false
+
+concurrency:
+  group: package-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # ════════════════════════════════════════════════════════════════
+  # JOB 1 — PLAN (Ubuntu): kiểm tra mọi thứ TRƯỚC khi tốn phút macOS
+  # ════════════════════════════════════════════════════════════════
+  plan:
+    name: 🗺️ Lập kế hoạch
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read       # hỏi xem repo:<Dự án> đã có artifact chưa
+    outputs:
+      count: ${{ steps.plan.outputs.count }}
+      needs_theos: ${{ steps.plan.outputs.needs_theos }}
+      needs_cyan: ${{ steps.plan.outputs.needs_cyan }}
+      needs_ldid: ${{ steps.plan.outputs.needs_ldid }}
+      needs_dpkg: ${{ steps.plan.outputs.needs_dpkg }}
+      needs_fastlane: ${{ steps.plan.outputs.needs_fastlane }}
+    env:
+      PKG_WORKFLOW_VERSION: '3.1.0'
+      REQUIRES_ENGINE: '2.2.0'      # package_engine.py phải từ bản này trở lên
+      TOKENS: ${{ inputs.extra }}
+      PRESET: ${{ inputs.preset }}
+      OPTIONS: ${{ inputs.options }}
+      IPA_URL: ${{ inputs.ipa_url != '' && 'set' || '' }}   # plan chỉ cần biết có hay chưa
+      OUT_IPA: ${{ inputs.output == 'IPA' || inputs.output == 'Tất cả' }}
+      OUT_CYAN: ${{ inputs.output == '.cyan' || inputs.output == 'Tất cả' }}
+      OUT_TF: ${{ inputs.output == 'TrollFools' || inputs.output == 'Tất cả' }}
+      OUT_DEB: ${{ inputs.output == 'DEB + dylib' || inputs.output == 'Tất cả' }}
+      SIGN_MODE: ${{ inputs.sign == 'Ký giả (ldid)' && 'fake' || inputs.sign == 'Ký chứng chỉ (p12)' && 'cert' || 'none' }}
+      HAS_CERT: ${{ secrets.SIGN_P12_BASE64 != '' && secrets.SIGN_P12_PASSWORD != '' && secrets.SIGN_PROFILE_BASE64 != '' }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔤 Chuẩn hoá tên package_engine.py
+        run: |
+          # App trên điện thoại có thể lưu file thành "package engine.py" hoặc "package-engine.py".
+          # Nếu thiếu tên đúng thì dùng bản lưu sai tên cho lần chạy này và nhắc bạn đổi tên trong repo.
+          cd .github/scripts
+          if [ ! -f package_engine.py ]; then
+            for alt in "package engine.py" "package-engine.py"; do
+              if [ -f "$alt" ]; then
+                cp "$alt" package_engine.py
+                echo "::warning::Đang dùng file '$alt'. Hãy đổi tên nó thành package_engine.py (gạch dưới) trong repo."
+                break
+              fi
+            done
+          fi
+
+      - name: 🧩 Kiểm tra phiên bản tương thích
+        run: |
+          if [ ! -f .github/scripts/package_engine.py ]; then
+            echo "::error::Không thấy .github/scripts/package_engine.py. Tên file phải đúng là package_engine.py (dấu gạch dưới _, không phải gạch ngang hay dấu cách) và nằm trong .github/scripts/."
+            echo "Các file hiện có trong .github/scripts/:"; ls -1 .github/scripts
+            exit 1
+          fi
+          ENGINE_VER=$(sed -n 's/^__version__ *= *"\([^"]*\)".*/\1/p' .github/scripts/package_engine.py | head -1)
+          if [ -z "$ENGINE_VER" ]; then
+            echo "::error::scripts/package_engine.py chưa có số phiên bản (bản quá cũ). Workflow $PKG_WORKFLOW_VERSION cần engine >= $REQUIRES_ENGINE — hãy thay file này."
+            exit 1
+          fi
+          LOWEST=$(printf '%s\n%s\n' "$REQUIRES_ENGINE" "$ENGINE_VER" | sort -V | head -1)
+          if [ "$LOWEST" != "$REQUIRES_ENGINE" ]; then
+            echo "::error::package_engine.py $ENGINE_VER quá cũ. Workflow $PKG_WORKFLOW_VERSION cần >= $REQUIRES_ENGINE — hãy thay file này."
+            exit 1
+          fi
+          echo "✅ Workflow $PKG_WORKFLOW_VERSION · engine $ENGINE_VER (cần >= $REQUIRES_ENGINE)"
+
+      - name: 🗺️ Mở rộng & kiểm tra (package_engine.py plan)
+        id: plan
+        run: python3 .github/scripts/package_engine.py plan
+
+  # ════════════════════════════════════════════════════════════════
+  # JOB 2 — PACKAGE (macOS): gom tweak → ký → đầu ra → ký IPA → Release
+  # ════════════════════════════════════════════════════════════════
+  package:
+    name: 🔨 Đóng gói
+    needs: plan
+    if: ${{ !inputs.dry_run }}
+    runs-on: macos-latest
+    timeout-minutes: 90
+    permissions:
+      contents: write     # tạo Release
+      actions: read       # repo:<Dự án> đọc artifact của tweaks.yml
+    env:
+      TOKENS: ${{ inputs.extra }}
+      PRESET: ${{ inputs.preset }}
+      OPTIONS: ${{ inputs.options }}
+      IPA_URL: ${{ inputs.ipa_url }}
+      OUT_IPA: ${{ inputs.output == 'IPA' || inputs.output == 'Tất cả' }}
+      OUT_CYAN: ${{ inputs.output == '.cyan' || inputs.output == 'Tất cả' }}
+      OUT_TF: ${{ inputs.output == 'TrollFools' || inputs.output == 'Tất cả' }}
+      OUT_DEB: ${{ inputs.output == 'DEB + dylib' || inputs.output == 'Tất cả' }}
+      SIGN_MODE: ${{ inputs.sign == 'Ký giả (ldid)' && 'fake' || inputs.sign == 'Ký chứng chỉ (p12)' && 'cert' || 'none' }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔤 Chuẩn hoá tên package_engine.py
+        run: |
+          # App trên điện thoại có thể lưu file thành "package engine.py" hoặc "package-engine.py".
+          # Nếu thiếu tên đúng thì dùng bản lưu sai tên cho lần chạy này và nhắc bạn đổi tên trong repo.
+          cd .github/scripts
+          if [ ! -f package_engine.py ]; then
+            for alt in "package engine.py" "package-engine.py"; do
+              if [ -f "$alt" ]; then
+                cp "$alt" package_engine.py
+                echo "::warning::Đang dùng file '$alt'. Hãy đổi tên nó thành package_engine.py (gạch dưới) trong repo."
+                break
+              fi
+            done
+          fi
+
+      - name: 🙈 Ẩn link IPA khỏi log
+        uses: levibostian/action-hide-sensitive-inputs@v1
+        with:
+          exclude_inputs: preset,extra,output,sign,options,release,dry_run
+
+      # ── Công cụ: chỉ cài thứ kế hoạch thật sự cần ──────────────────────
+      - name: 🛠️ Cài make · ldid
+        if: needs.plan.outputs.needs_ldid == 'true'
+        run: |
+          brew install make ldid
+          # Theos cần GNU make 4+; macOS chỉ có 3.81 nên đưa gnubin lên đầu PATH
+          echo "$(brew --prefix make)/libexec/gnubin" >> "$GITHUB_PATH"
+
+      - name: 🛠️ Cài dpkg
+        if: needs.plan.outputs.needs_dpkg == 'true'
+        run: brew install dpkg
+
+      - name: 🛠️ Cài cyan (pyzule-rw)
+        if: needs.plan.outputs.needs_cyan == 'true'
+        run: pipx install --force https://github.com/asdfzxcvbn/pyzule-rw/archive/main.zip
+
+      - name: 🛠️ Cài fastlane (ký lại IPA bằng chứng chỉ)
+        if: needs.plan.outputs.needs_fastlane == 'true'
+        run: command -v fastlane > /dev/null || brew install fastlane
+
+      # ── Theos: chỉ khi có tweak build từ source / tự biên dịch ─────────
+      - name: 🧱 Lấy commit Theos
+        if: needs.plan.outputs.needs_theos == 'true'
+        run: echo "THEOS_COMMIT=$(git ls-remote https://github.com/theos/theos HEAD | awk '{print substr($1,1,7)}')" >> "$GITHUB_ENV"
+
+      - name: 🧱 Cache Theos
+        id: cache-theos
+        if: needs.plan.outputs.needs_theos == 'true'
+        uses: actions/cache@v5
+        with:
+          path: theos
+          key: 18.6-SDK-${{ env.THEOS_COMMIT }}
+
+      - name: 🧱 Setup Theos (cache miss)
+        if: needs.plan.outputs.needs_theos == 'true' && steps.cache-theos.outputs.cache-hit != 'true'
+        run: |
+          git clone --quiet --depth=1 --recurse-submodules https://github.com/theos/theos.git
+          git clone --quiet --depth=1 -n --filter=tree:0 https://github.com/Tonwalter888/iOS-SDKs.git
+          cd iOS-SDKs
+          git sparse-checkout set --no-cone iPhoneOS18.6.sdk
+          git checkout --quiet
+          mv *.sdk "${GITHUB_WORKSPACE}/theos/sdks"
+
+      - name: 🧱 Hoàn tất môi trường Theos
+        if: needs.plan.outputs.needs_theos == 'true'
+        run: |
+          echo "THEOS=${GITHUB_WORKSPACE}/theos" >> "$GITHUB_ENV"
+          sed -i '' 's/od -c "$i" | head/od -c "$i" 2>\/dev\/null | head/g' "${GITHUB_WORKSPACE}/theos/bin/convert_xml_plist.sh" || true
+          curl -fL --silent --show-error -o /usr/local/bin/tbd "https://github.com/inoahdev/tbd/releases/download/2.2/tbd-mac"
+          chmod +x /usr/local/bin/tbd
+
+      # ── Chứng chỉ (chỉ khi Ký chứng chỉ) ───────────────────────────────
+      - name: 🔐 Nhập chứng chỉ ký vào keychain tạm
+        if: env.SIGN_MODE == 'cert'
+        env:
+          P12_B64: ${{ secrets.SIGN_P12_BASE64 }}
+          P12_PASS: ${{ secrets.SIGN_P12_PASSWORD }}
+          PROFILE_B64: ${{ secrets.SIGN_PROFILE_BASE64 }}
+        run: |
+          set -euo pipefail
+          KC="$RUNNER_TEMP/pkg-sign.keychain-db"
+          KC_PASS=$(uuidgen)
+          echo "::add-mask::$KC_PASS"
+          printf '%s' "$P12_B64" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          printf '%s' "$PROFILE_B64" | base64 --decode > "$RUNNER_TEMP/profile.mobileprovision"
+          security create-keychain -p "$KC_PASS" "$KC"
+          security set-keychain-settings -lut 21600 "$KC"
+          security unlock-keychain -p "$KC_PASS" "$KC"
+          security import "$RUNNER_TEMP/cert.p12" -P "$P12_PASS" -A -t cert -f pkcs12 -k "$KC"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KC_PASS" "$KC" > /dev/null
+          security list-keychains -d user -s "$KC" $(security list-keychains -d user | tr -d '"')
+          IDENTITY=$(security find-identity -v -p codesigning "$KC" | sed -n 's/.*"\(.*\)"/\1/p' | head -1)
+          [ -n "$IDENTITY" ] || { echo "::error::Không tìm thấy identity ký trong file p12."; exit 1; }
+          rm -f "$RUNNER_TEMP/cert.p12"
+          {
+            echo "SIGN_IDENTITY=$IDENTITY"
+            echo "SIGN_KEYCHAIN=$KC"
+            echo "SIGN_PROFILE=$RUNNER_TEMP/profile.mobileprovision"
+          } >> "$GITHUB_ENV"
+          echo "🔐 Identity: $IDENTITY"
+
+      # ── IPA nguồn ──────────────────────────────────────────────────────
+      - name: 📱 Tải và kiểm tra IPA
+        if: env.OUT_IPA == 'true'
+        run: |
+          curl -fL --retry 3 --silent --show-error -o app.ipa "$IPA_URL"
+          mime=$(file --mime-type -b app.ipa)
+          if [[ "$mime" != "application/x-ios-app" && "$mime" != "application/zip" ]]; then
+            echo "::error::Không phải IPA hợp lệ (phát hiện: $mime)."; exit 1
+          fi
+          unzip -tq app.ipa > /dev/null || { echo "::error::File IPA bị hỏng."; exit 1; }
+          PLIST=$(unzip -Z1 app.ipa 'Payload/*.app/Info.plist' | awk '{print length, $0}' | sort -n | head -1 | cut -d' ' -f2-)
+          unzip -p app.ipa "$PLIST" > "$RUNNER_TEMP/Info.plist"
+          VER=$(/usr/libexec/PlistBuddy -c "Print :CFBundleShortVersionString" "$RUNNER_TEMP/Info.plist" 2>/dev/null \
+             || /usr/libexec/PlistBuddy -c "Print :CFBundleVersion" "$RUNNER_TEMP/Info.plist" 2>/dev/null || true)
+          VER=$(printf '%s' "$VER" | tr -cd '[:alnum:]._-')
+          echo "APP_VERSION=$VER" >> "$GITHUB_ENV"
+          echo "IPA_PATH=$GITHUB_WORKSPACE/app.ipa" >> "$GITHUB_ENV"
+          echo "📱 App version: ${VER:-không rõ}"
+
+      # ── Lõi: bể → ký tweak → đầu ra (+ ký IPA) ─────────────────────────
+      - name: 🧺 Gom tweak vào bể (resolve)
+        run: python3 .github/scripts/package_engine.py resolve
+
+      - name: ✍️ Ký tweak
+        if: env.SIGN_MODE != 'none'
+        run: python3 .github/scripts/package_engine.py sign
+
+      - name: 🏭 Tạo đầu ra và ký IPA (make)
+        id: make
+        run: python3 .github/scripts/package_engine.py make
+
+      - name: 🧹 Xoá keychain tạm
+        if: always() && env.SIGN_MODE == 'cert'
+        run: |
+          [ -n "${SIGN_KEYCHAIN:-}" ] && security delete-keychain "$SIGN_KEYCHAIN" || true
+          rm -f "$RUNNER_TEMP/profile.mobileprovision"
+
+      # ── Phát hành ──────────────────────────────────────────────────────
+      - name: 📤 Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: package-${{ github.run_number }}
+          path: dist/
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: 🚀 Release nháp
+        if: inputs.release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: pkg-${{ github.run_number }}
+          name: ${{ steps.make.outputs.release_name }}
+          files: dist/*
+          draft: true
+
+      - name: 🔗 Liên kết
+        if: inputs.release
+        run: |
+          echo "::notice::Release nháp tại https://github.com/${{ github.repository }}/releases"

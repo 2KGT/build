@@ -1,0 +1,9 @@
+Package: com.yourname.liquid
+Name: Liquid
+Version: 1.0.2
+Architecture: iphoneos-arm
+Description: Liquid Glass và tuỳ chỉnh tab cho YouTube
+Maintainer: yourname
+Author: yourname
+Section: Tweaks
+Depends: mobilesubstrate (>= 0.9.5000)

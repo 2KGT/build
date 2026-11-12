@@ -1,0 +1,9 @@
+Package: com.2kgt.twitter.tweak
+Name: Twitter Enhancer
+Version: 1.0.0
+Architecture: iphoneos-arm
+Description: Chặn quảng cáo, mở khoá tính năng cho Twitter / X.
+Maintainer: 2KGT
+Author: 2KGT
+Section: Tweaks
+Depends: mobilesubstrate

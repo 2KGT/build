@@ -1,0 +1,74 @@
+# .github/scripts/engine_core.py
+import os
+import subprocess
+import shutil
+import sys
+import re
+
+# Log build được ghi ra file này để bước "Tổng kết & Phân tích lỗi" trong workflow đọc
+BUILD_LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), "build.log")
+_ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+def _write_log(line):
+    try:
+        with open(BUILD_LOG, "a", encoding="utf-8") as fh:
+            fh.write(_ANSI.sub("", line) + "\n")
+    except OSError:
+        pass
+
+def log(stage, msg):
+    print(f"\n🚀 [{stage.upper()}] {msg}")
+
+def run_cmd(cmd, cwd=None, env=None):
+    full_env = os.environ.copy()
+    if env: full_env.update(env)
+    
+    if 'THEOS' not in full_env:
+        default_theos = "/opt/theos"
+        if os.path.exists(default_theos): full_env['THEOS'] = default_theos
+        else:
+            log("ERROR", "Biến môi trường THEOS không tìm thấy!")
+            sys.exit(1)
+
+    try:
+        process = subprocess.Popen(cmd, cwd=cwd, env=full_env, stdout=subprocess.PIPE, 
+                                   stderr=subprocess.STDOUT, text=True, bufsize=1)
+        for line in process.stdout:
+            print(f"   [MAKE] {line.strip()}")
+            _write_log(line.rstrip())
+        if process.wait() != 0: raise subprocess.CalledProcessError(process.returncode, cmd)
+    except Exception as e:
+        log("ERROR", f"Lệnh {' '.join(cmd)} thất bại: {e}")
+        sys.exit(1)
+
+def build_and_fix(target_dir, output_dir, new_ver=None, clean=True):
+    """Module/handler do build_engine.py chạy TRƯỚC khi gọi hàm này (một cơ chế duy nhất)."""
+    target_dir = os.path.abspath(target_dir)
+    open(BUILD_LOG, "w").close()  # làm mới log cho lần build này
+    
+    # --- BUILD ---
+    if not os.path.exists(os.path.join(target_dir, "Makefile")):
+        log("ERROR", f"Không tìm thấy Makefile tại {target_dir}")
+        sys.exit(1)
+
+    log("BUILD", f"Bắt đầu biên dịch: {os.path.basename(target_dir)}")
+    if clean:
+        run_cmd(["make", "clean"], cwd=target_dir)
+    else:
+        log("BUILD", "Bỏ qua make clean (clean_build = false)")
+    run_cmd(["make", "package", "FINALPACKAGE=1"], cwd=target_dir)
+
+    # --- THU GOM ---
+    packages_dir = os.path.join(target_dir, "packages")
+    deb_files = [f for f in os.listdir(packages_dir) if f.endswith(".deb")] if os.path.exists(packages_dir) else []
+    
+    if not deb_files:
+        log("ERROR", "Không tìm thấy file .deb nào sau khi build.")
+        sys.exit(1)
+
+    os.makedirs(output_dir, exist_ok=True)
+    for file in deb_files:
+        shutil.copy2(os.path.join(packages_dir, file), os.path.join(output_dir, file))
+        log("SUCCESS", f"Đã xuất file: {file}")
+    
+    return True

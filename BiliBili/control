@@ -1,0 +1,9 @@
+Package: com.2kgt.bilibilihd.tweak
+Name: Bilibili HD Enhancer
+Version: 1.0.2
+Architecture: iphoneos-arm
+Description: Chặn quảng cáo, ẩn watermark, mở khoá 4K và tải 4K cho Bilibili HD.
+Maintainer: 2KGT
+Author: 2KGT
+Section: Tweaks
+Depends: mobilesubstrate
