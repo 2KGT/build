@@ -22,7 +22,7 @@
 #import "BuildInfo.h"
 #endif
 #ifndef TWEAK_BUILD_VERSION
-#define TWEAK_BUILD_VERSION @"2.1.91"
+#define TWEAK_BUILD_VERSION @"2.1.92"
 #endif
 #ifndef TWEAK_UPSTREAM_COUNT
 #define TWEAK_UPSTREAM_COUNT 0
@@ -91,7 +91,7 @@ typedef id (^AutoACHookMaker)(IMP original, SEL selector);
 static BOOL AutoACHook(NSString *className, NSString *selectorName, BOOL classMethod,
                        const char *prefix, AutoACHookMaker maker);
 
-static NSString *const kCurrentBuildID = @"2.1.91";
+static NSString *const kCurrentBuildID = @"2.1.92";
 
 // ── Nhật ký lỗi: ghi dấu vết và nguyên nhân crash vào Documents/AutoAC_crash.log ──
 static int gTraceFD = -1;
@@ -8564,7 +8564,7 @@ static NSString *AutoACDiagnosticsText(void) {
     [t appendFormat:@"\n[Lọc danh sách] tab hiện tại %@ · %@\n", gListTabIdent.length ? gListTabIdent : @"?",
         gListFilterAllowed ? @"đang lọc" : (gListTabIdent.length ? @"không lọc (chỉ lọc ở Trang chủ)" : @"không lọc (chưa đọc được tab)")];
     [t appendFormat:@"[Lọc danh sách] bỏ hàng Short %ld · bài đăng %ld · Mix %ld · game %ld · thẻ Premium %ld\n", (long)gDropShelf, (long)gDropPost, (long)gDropMix, (long)gDropGame, (long)gDropBanner];
-    [t appendFormat:@"[Lọc danh sách] ô đã duyệt %ld · Ẩn video Short %@\n", (long)gFeedCellsSeen, [kPrefs boolForKey:kHideShortsShelfKey] ? @"bật" : @"tắt"];
+    [t appendFormat:@"[Lọc danh sách] ô đã duyệt %ld · Ẩn video Short %@\n", (long)gFeedCellsSeen, [kPrefs boolForKey:kHideShortsShelfKey] ? (AutoACShelfScopeAllowed() ? @"bật (tab này: ẩn)" : @"bật (tab này: giữ nguyên)") : @"tắt"];
     if (gPremiumSeen.count) [t appendFormat:@"[Thẻ Premium/Music/Short đã thấy] %@\n", [gPremiumSeen.array componentsJoinedByString:@" | "]];
     if (gOverlaySeen.count) [t appendFormat:@"\n[%@]\n%@\n", AutoACT(@"Mã lớp phủ Shorts"), [gOverlaySeen.array componentsJoinedByString:@"\n"]];
     if (gPlayerTopInfo.length) [t appendFormat:@"\n[Nút gốc hàng trên trình phát]\n%@\n", gPlayerTopInfo];
@@ -9617,6 +9617,18 @@ static BOOL AutoACWatchPageOnScreen(void) {
     return on;
 }
 
+// "Ẩn video Short" chỉ được xoá hàng Short ở nơi người dùng muốn (Trang chủ, tìm kiếm, trang xem...) và KHÔNG xoá ở các tab sau:
+// Kênh đăng ký, Thư viện, Lịch sử, Thông báo, Playlist, Tải xuống. Ở đó phần tử bị xoá để lại trang trống / khoảng trắng.
+// Không đọc được tab thì vẫn ẩn (như YTLite) để công tắc không bị "không chạy".
+static BOOL AutoACShelfScopeAllowed(void) {
+    NSString *t = gListTabIdent;
+    if (t.length == 0) return YES;
+    for (NSString *w in @[@"subscriptions", @"library", @"history", @"notification", @"playlist", @"download"]) {
+        if ([t rangeOfString:w options:NSCaseInsensitiveSearch].location != NSNotFound) return NO;
+    }
+    return YES;
+}
+
 static void AutoACInstallShortsShelfHooks(void) {
     AutoACHook(@"YTIElementRenderer", @"elementData", NO, "@16", ^id(IMP original, SEL selector) {
         return ^id(id self_) {
@@ -9631,9 +9643,10 @@ static void AutoACInstallShortsShelfHooks(void) {
             }
             // Hàng Short: làm đúng YTLite, KHÔNG chặn theo tab / trang xem / Short đang mở (các điều kiện đó làm "Ẩn video Short" không chạy).
             // Bài đăng / Mix / game / banner vẫn chỉ lọc ở Trang chủ (bỏ phần tử ở tab khác để lại khoảng trắng).
+            BOOL shelfHere = fShelf && AutoACShelfScopeAllowed();
             BOOL others = fPost || fMix || fGame || fBanner;
             BOOL otherScope = others && gListFilterAllowed && !(gShortsOnScreenAt > 0 && now - gShortsOnScreenAt < 2.5) && !AutoACWatchPageOnScreen();
-            if (!fShelf && !otherScope)
+            if (!shelfHere && !otherScope)
                 return ((id (*)(id, SEL))original)(self_, selector);
             static const void *kVerdictKey = &kVerdictKey;
             NSNumber *verdict = objc_getAssociatedObject(self_, kVerdictKey);   // 0 giữ, 2 hàng Short, 3 bài đăng, 4 Mix, 5 game
@@ -9655,7 +9668,7 @@ static void AutoACInstallShortsShelfHooks(void) {
                 objc_setAssociatedObject(self_, kVerdictKey, verdict, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
             }
             switch (verdict.integerValue) {
-                case 2: if (fShelf) { gDropShelf++; return nil; } break;
+                case 2: if (shelfHere) { gDropShelf++; return nil; } break;
                 case 3: if (fPost && otherScope) { gDropPost++; return nil; } break;
                 case 4: if (fMix && otherScope) { gDropMix++; return nil; } break;
                 case 5: if (fGame && otherScope) { gDropGame++; return nil; } break;
@@ -9671,7 +9684,7 @@ static void AutoACInstallShortsShelfHooks(void) {
             BOOL bannerOn = [kPrefs boolForKey:kHidePromosKey];
             // Xoá hàng Short ở mức ô (deleteItemsAtIndexPaths) như YTLite: ở mọi tab, không chặn theo tab / trang xem / Short đang mở.
             // Thẻ mời Premium (upsell) vẫn không xoá khi đang ở trang xem hoặc Short.
-            BOOL shelfOn = [kPrefs boolForKey:kHideShortsShelfKey];
+            BOOL shelfOn = [kPrefs boolForKey:kHideShortsShelfKey] && AutoACShelfScopeAllowed();
             if (!cell || !(bannerOn || shelfOn || [kPrefs boolForKey:kDiagKey])) return cell;
             BOOL blocked = (gShortsOnScreenAt > 0 && CACurrentMediaTime() - gShortsOnScreenAt < 2.5) || AutoACWatchPageOnScreen();
             if (blocked) bannerOn = NO;
