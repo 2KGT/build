@@ -22,7 +22,7 @@
 #import "BuildInfo.h"
 #endif
 #ifndef TWEAK_BUILD_VERSION
-#define TWEAK_BUILD_VERSION @"2.1.107"
+#define TWEAK_BUILD_VERSION @"2.1.108"
 #endif
 #ifndef TWEAK_UPSTREAM_COUNT
 #define TWEAK_UPSTREAM_COUNT 0
@@ -90,7 +90,7 @@ typedef id (^AutoACHookMaker)(IMP original, SEL selector);
 static BOOL AutoACHook(NSString *className, NSString *selectorName, BOOL classMethod,
                        const char *prefix, AutoACHookMaker maker);
 
-static NSString *const kCurrentBuildID = @"2.1.107";
+static NSString *const kCurrentBuildID = @"2.1.108";
 
 // ── Nhật ký lỗi: ghi dấu vết và nguyên nhân crash vào Documents/AutoAC_crash.log ──
 static int gTraceFD = -1;
@@ -7315,8 +7315,9 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
 @property (nonatomic, strong) UIView *detailDisc;
 @property (nonatomic, strong) UIImageView *detailIcon;
 @property (nonatomic, strong) UILabel *detailTitle, *detailCaption, *footer;
-@property (nonatomic, strong) NSArray<UIView *> *posButtons;   // Trên / Dưới / Trái / Phải
+@property (nonatomic, strong) NSArray<UIView *> *posButtons;   // Trái / Trên / Dưới / Phải (thứ tự hiển thị)
 @property (nonatomic, strong) UIButton *detailOffBtn;          // nút Tắt ở góc trên phải thẻ Chi tiết
+@property (nonatomic, strong) UILabel *detailHeader;           // tiêu đề "Chi tiết" trên thẻ
 @property (nonatomic, weak) UIScrollView *scroll;
 @property (nonatomic, strong) AutoACOverlayChip *dragChip;
 @property (nonatomic, assign) NSInteger holeStrip, holeIndex;
@@ -7462,6 +7463,11 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
         _hints = hints;
         _headerParts = parts;
 
+        _detailHeader = [[UILabel alloc] init];
+        _detailHeader.text = AutoACT(@"Chi tiết");
+        _detailHeader.font = [UIFont systemFontOfSize:12 weight:UIFontWeightSemibold];
+        _detailHeader.textColor = UIColor.secondaryLabelColor;
+        [self addSubview:_detailHeader];
         _detail = [[UIView alloc] init];
         _detail.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:0.07];
         _detail.layer.cornerRadius = 20;
@@ -7498,12 +7504,14 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
         [_detailOffBtn addAction:[UIAction actionWithHandler:^(__kindof UIAction *a) { [weakSelf applyPosition:4]; }] forControlEvents:UIControlEventTouchUpInside];
         [_detail addSubview:_detailOffBtn];
 
-        // bốn nút thuốc: Trên(0), Dưới(1), Trái(2), Phải(3)
-        NSArray<NSString *> *posTitles = @[AutoACT(@"Trên"), AutoACT(@"Dưới"), AutoACT(@"Trái"), AutoACT(@"Phải")];
-        NSArray<UIColor *> *posTints = @[AutoACOverlayStripColor(0), AutoACOverlayStripColor(1), AutoACOverlayStripColor(3), AutoACOverlayStripColor(4)];
+        // bốn nút thuốc theo thứ tự hiển thị: Trái(pos=2) - Trên(pos=0) - Dưới(pos=1) - Phải(pos=3)
+        NSArray<NSString *> *posTitles = @[AutoACT(@"Trái"), AutoACT(@"Trên"), AutoACT(@"Dưới"), AutoACT(@"Phải")];
+        NSArray<UIColor *> *posTints = @[AutoACOverlayStripColor(3), AutoACOverlayStripColor(0), AutoACOverlayStripColor(1), AutoACOverlayStripColor(4)];
+        NSArray<NSNumber *> *posIndices = @[@2, @0, @1, @3];   // vị trí logic tương ứng mỗi nút
         NSMutableArray<UIView *> *posButtons = [NSMutableArray array];
         for (NSUInteger i = 0; i < posTitles.count; i++) {
-            UIView *pb = ACGChoicePill(posTitles[i], posTints[i], ^{ [weakSelf applyPosition:i]; });
+            NSUInteger posIdx = [posIndices[i] unsignedIntegerValue];
+            UIView *pb = ACGChoicePill(posTitles[i], posTints[i], ^{ [weakSelf applyPosition:posIdx]; });
             [_detail addSubview:pb];
             [posButtons addObject:pb];
         }
@@ -7665,6 +7673,8 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
         self.hints[2].frame = strip.bounds;
         y += 30 + kOverlayOffStripHeight + 12;
     }
+    self.detailHeader.frame = CGRectMake(2, y, 200, 22);
+    y += 26;
     self.detail.frame = CGRectMake(0, y, width, 106);
     self.detailDisc.frame = CGRectMake(14, 12, 36, 36);
     self.detailOffBtn.frame = CGRectMake(width - 14 - 36, 12, 36, 36);
@@ -7805,7 +7815,10 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
     self.detailIcon.image = entry ? AutoACSymbolImage(entry[@"symbol"], cfg) : nil;
     NSUInteger position = entry ? [self positionOf:self.selectedIdent] : 4;
     BOOL isOff = (position == 4);
-    for (NSUInteger i = 0; i < self.posButtons.count; i++) ACGChoicePillSetActive(self.posButtons[i], entry != nil && i == position);
+    // Mapping vị trí logic → chỉ số nút hiển thị: Trái(2)→0, Trên(0)→1, Dưới(1)→2, Phải(3)→3
+    NSArray<NSNumber *> *posToBtn = @[@1, @2, @0, @3];
+    NSUInteger btnIdx = (position < posToBtn.count) ? [posToBtn[position] unsignedIntegerValue] : NSUIntegerMax;
+    for (NSUInteger i = 0; i < self.posButtons.count; i++) ACGChoicePillSetActive(self.posButtons[i], entry != nil && i == btnIdx);
     // Nút Tắt tròn ở góc: nền xanh khi đang tắt
     self.detailOffBtn.backgroundColor = (entry != nil && isOff)
         ? [UIColor.systemRedColor colorWithAlphaComponent:0.22]
