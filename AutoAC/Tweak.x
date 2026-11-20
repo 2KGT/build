@@ -22,7 +22,7 @@
 #import "BuildInfo.h"
 #endif
 #ifndef TWEAK_BUILD_VERSION
-#define TWEAK_BUILD_VERSION @"2.1.109"
+#define TWEAK_BUILD_VERSION @"2.1.110"
 #endif
 #ifndef TWEAK_UPSTREAM_COUNT
 #define TWEAK_UPSTREAM_COUNT 0
@@ -90,7 +90,7 @@ typedef id (^AutoACHookMaker)(IMP original, SEL selector);
 static BOOL AutoACHook(NSString *className, NSString *selectorName, BOOL classMethod,
                        const char *prefix, AutoACHookMaker maker);
 
-static NSString *const kCurrentBuildID = @"2.1.109";
+static NSString *const kCurrentBuildID = @"2.1.110";
 
 // ── Nhật ký lỗi: ghi dấu vết và nguyên nhân crash vào Documents/AutoAC_crash.log ──
 static int gTraceFD = -1;
@@ -7264,11 +7264,26 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
 
 - (void)refreshLook {
     BOOL dim = _strip == 2;   // dải "đang tắt/đang ẩn": mờ hơn
-    _disc.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:dim ? 0.10 : 0.16];
-    _disc.layer.borderWidth = _picked ? 1.5 : 0.75;
-    _disc.layer.borderColor = (_picked ? [UIColor.labelColor colorWithAlphaComponent:0.9] : [UIColor.labelColor colorWithAlphaComponent:0.34]).CGColor;
-    _iconView.alpha = dim ? 0.8 : 1.0;
-    _caption.alpha = _picked ? 1.0 : (dim ? 0.8 : 0.95);
+    if (_picked) {
+        _disc.backgroundColor = [_tint colorWithAlphaComponent:0.28];
+        _disc.layer.borderWidth = 2.0;
+        _disc.layer.borderColor = [_tint colorWithAlphaComponent:0.9].CGColor;
+        _iconView.tintColor = _tint;
+    } else {
+        _disc.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:dim ? 0.09 : 0.14];
+        _disc.layer.borderWidth = 0.75;
+        _disc.layer.borderColor = [UIColor.labelColor colorWithAlphaComponent:0.25].CGColor;
+        _iconView.tintColor = [UIColor.labelColor colorWithAlphaComponent:dim ? 0.5 : 0.75];
+    }
+    _iconView.alpha = 1.0;
+    _caption.alpha = _picked ? 1.0 : (dim ? 0.65 : 0.80);
+    // tabMode: icon weight đậm hơn khi đang chọn
+    if (_tabMode && _shownDiameter > 0.5) {
+        CGFloat pt = 19.0 * _shownDiameter / 44.0;
+        UIImageSymbolWeight wt = _picked ? UIImageSymbolWeightSemibold : UIImageSymbolWeightRegular;
+        UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:pt weight:wt];
+        _iconView.image = AutoACSymbolImage(_symbolName, cfg);
+    }
 }
 
 - (void)setPicked:(BOOL)picked {
@@ -7287,7 +7302,8 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
         _disc.layer.cornerRadius = d / 2;
         _iconView.frame = _disc.bounds;
         CGFloat pt = _tabMode ? 19.0 * d / 44.0 : d * 0.46;
-        UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:pt weight:UIImageSymbolWeightMedium];
+        UIImageSymbolWeight wt = _tabMode ? (_picked ? UIImageSymbolWeightSemibold : UIImageSymbolWeightRegular) : UIImageSymbolWeightMedium;
+        UIImageSymbolConfiguration *cfg = [UIImageSymbolConfiguration configurationWithPointSize:pt weight:wt];
         _iconView.image = AutoACSymbolImage(_symbolName, cfg);
     }
     _caption.font = [UIFont systemFontOfSize:width >= 52 ? 11.5 : 10.5 weight:UIFontWeightSemibold];
@@ -7437,7 +7453,7 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
             UILabel *title = [[UILabel alloc] init];
             title.text = names[(NSUInteger)s];
             title.font = [UIFont systemFontOfSize:12.5 weight:UIFontWeightSemibold];
-            title.textColor = UIColor.secondaryLabelColor;
+            title.textColor = tint;   // đồng bộ màu tiêu đề với tint của dải
             UILabel *caption = [[UILabel alloc] init];
             caption.text = captions[(NSUInteger)s];
             caption.font = [UIFont systemFontOfSize:11];
@@ -8199,7 +8215,7 @@ static NSString *ACGTabKey(NSInteger strip, NSString *ident) { return [NSString 
             UILabel *title = [[UILabel alloc] init];
             title.text = names[(NSUInteger)s];
             title.font = [UIFont systemFontOfSize:12.5 weight:UIFontWeightSemibold];
-            title.textColor = UIColor.secondaryLabelColor;
+            title.textColor = tint;   // đồng bộ màu tiêu đề với tint của dải (xanh lá / xám)
             UILabel *caption = [[UILabel alloc] init];
             caption.text = captions[(NSUInteger)s];
             caption.font = [UIFont systemFontOfSize:11];
@@ -12072,8 +12088,8 @@ static void AutoACCollapseSpeedPicker(void) {
     for (NSUInteger i = 0; i < self.labels.count; i++) {
         CGFloat d = fabs((CGFloat)i - pos);
         UILabel *l = self.labels[i];
-        l.alpha = MAX(0.2, 1 - 0.42 * d);
-        CGFloat sc = 1 - 0.07 * MIN(d, 2);
+        l.alpha = MAX(0.38, 1 - 0.32 * d);
+        CGFloat sc = 1 - 0.05 * MIN(d, 2);
         l.transform = CGAffineTransformMakeScale(sc, sc);
     }
 }
@@ -12174,10 +12190,10 @@ static void AutoACShowWheel(UIView *button, NSArray<NSString *> *texts, NSIndexS
 
     CGFloat inset = (h - kSpeedRow) / 2;
     UIView *mark = [[UIView alloc] initWithFrame:CGRectMake(5, inset, w - 10, kSpeedRow)];
-    mark.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:0.12];
+    mark.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:0.20];
     mark.layer.cornerRadius = kSpeedRow / 2;   // ô chọn bo tròn như viên thuốc
-    mark.layer.borderWidth = 0.5;
-    mark.layer.borderColor = [UIColor.labelColor colorWithAlphaComponent:0.18].CGColor;
+    mark.layer.borderWidth = 0.75;
+    mark.layer.borderColor = [UIColor.labelColor colorWithAlphaComponent:0.32].CGColor;
     [blur.contentView addSubview:mark];
 
     UIScrollView *scroll = [[UIScrollView alloc] initWithFrame:CGRectMake(0, 0, w, h)];
