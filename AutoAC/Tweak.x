@@ -22,7 +22,7 @@
 #import "BuildInfo.h"
 #endif
 #ifndef TWEAK_BUILD_VERSION
-#define TWEAK_BUILD_VERSION @"2.1.110"
+#define TWEAK_BUILD_VERSION @"2.1.111"
 #endif
 #ifndef TWEAK_UPSTREAM_COUNT
 #define TWEAK_UPSTREAM_COUNT 0
@@ -90,7 +90,7 @@ typedef id (^AutoACHookMaker)(IMP original, SEL selector);
 static BOOL AutoACHook(NSString *className, NSString *selectorName, BOOL classMethod,
                        const char *prefix, AutoACHookMaker maker);
 
-static NSString *const kCurrentBuildID = @"2.1.110";
+static NSString *const kCurrentBuildID = @"2.1.111";
 
 // ── Nhật ký lỗi: ghi dấu vết và nguyên nhân crash vào Documents/AutoAC_crash.log ──
 static int gTraceFD = -1;
@@ -7480,9 +7480,9 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
         _headerParts = parts;
 
         _detailHeader = [[UILabel alloc] init];
-        _detailHeader.text = AutoACT(@"Chi tiết");
-        _detailHeader.font = [UIFont systemFontOfSize:12 weight:UIFontWeightSemibold];
-        _detailHeader.textColor = UIColor.secondaryLabelColor;
+        _detailHeader.text = @"CHI TIẾT";
+        _detailHeader.font = [UIFont systemFontOfSize:12.5 weight:UIFontWeightSemibold];
+        _detailHeader.textColor = UIColor.labelColor;
         [self addSubview:_detailHeader];
         _detail = [[UIView alloc] init];
         _detail.backgroundColor = [UIColor.labelColor colorWithAlphaComponent:0.07];
@@ -7504,7 +7504,8 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
         _detailTitle.textColor = UIColor.labelColor;
         [_detail addSubview:_detailTitle];
         _detailCaption = [[UILabel alloc] init];
-        _detailCaption.text = AutoACT(@"Chi tiết");
+        _detailCaption.text = @"";
+        _detailCaption.hidden = YES;
         _detailCaption.font = [UIFont systemFontOfSize:11.5];
         _detailCaption.textColor = UIColor.secondaryLabelColor;
         [_detail addSubview:_detailCaption];
@@ -7694,8 +7695,7 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
     self.detail.frame = CGRectMake(0, y, width, 106);
     self.detailDisc.frame = CGRectMake(14, 12, 36, 36);
     self.detailOffBtn.frame = CGRectMake(width - 14 - 36, 12, 36, 36);
-    self.detailTitle.frame = CGRectMake(62, 11, MAX(width - 62 - 14 - 36 - 10, 40), 22);
-    self.detailCaption.frame = CGRectMake(62, 33, MAX(width - 62 - 14 - 36 - 10, 40), 16);
+    self.detailTitle.frame = CGRectMake(62, 18, MAX(width - 62 - 14 - 36 - 10, 40), 22);   // căn giữa dọc trong disc (12 + (36-22)/2 = 19 ≈ 18)
     ACGLayoutPillRow(self.posButtons, width, 62);
     y += 106 + 12;
     CGSize fit = [self.footer sizeThatFits:CGSizeMake(MAX(width - 4, 10), CGFLOAT_MAX)];
@@ -10794,7 +10794,7 @@ static BOOL AutoACWatchPageOnScreen(void) {
 // Kênh đăng ký, Thư viện, Lịch sử, Thông báo, Playlist, Tải xuống. Ở đó phần tử bị xoá để lại trang trống / khoảng trắng.
 static BOOL AutoACShelfScopeAllowed(void) {
     NSString *t = gListTabIdent;
-    if (t.length == 0) return YES;
+    if (t.length == 0) return NO;   // chưa đọc được tab → không lọc: tránh ẩn nhầm nội dung khi trang chủ mới load
     for (NSString *w in @[@"subscriptions", @"library", @"history", @"notification", @"playlist", @"download"]) {
         if ([t rangeOfString:w options:NSCaseInsensitiveSearch].location != NSNotFound) return NO;
     }
@@ -10907,7 +10907,7 @@ static void AutoACInstallShortsShelfHooks(void) {
                     if (!cv) return;
                     @try { [cv deleteItemsAtIndexPaths:@[ip]]; } @catch (__unused NSException *e) {}
                 });
-                return ((id (*)(id, SEL, id))original)(self_, selector, indexPath);
+                return cell;   // dùng cell đã lấy ở đầu, tránh gọi original lần 2 (gây double-dequeue)
             }
             return cell;
         };
@@ -11427,7 +11427,7 @@ static void AutoACOpenDownloadMenu(UIView *from, BOOL inShorts) {
 }
 
 // Tạo nút tròn nổi; đặt bằng frame (không dùng Auto Layout) để không phải bố cục lại trong layoutSubviews
-static const CGFloat kFloatSize = 36;   // cỡ vòng kính của nút nổi: icon 22pt nằm giữa, chừa viền kính rộng hơn (trước 30)
+static const CGFloat kFloatSize = 34;   // cỡ vòng kính của nút nổi: icon 22pt nằm giữa, chừa viền kính rộng hơn (trước 36)
 static UIButton *AutoACMakeFloatingButton(NSString *symbol, CGFloat glyph, void (^tap)(void)) {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
     button.accessibilityLabel = @"AutoAC";
@@ -11928,12 +11928,37 @@ static double AutoACPlayerDouble(id player, NSArray<NSString *> *names);
 @property (nonatomic) BOOL busy;
 @property (nonatomic) CFTimeInterval startedAt;
 @property (nonatomic) double lastTime;   // giây đang phát trong PiP, nhớ lúc sắp thoát để đưa trình phát YouTube về đúng chỗ
+// Pre-fetch stream URL khi video bắt đầu phát → bấm PiP thì dùng ngay, không chờ fetch
+@property (nonatomic, strong) NSURL *preparedURL;
+@property (nonatomic, copy) NSString *preparedVideoID;
 + (instancetype)shared;
 - (void)toggle;
 - (void)stopForYouTube;
+- (void)prepareForVideo:(NSString *)videoID;
 @end
 @implementation AutoACPiP
 + (instancetype)shared { static AutoACPiP *i; static dispatch_once_t o; dispatch_once(&o, ^{ i = [AutoACPiP new]; }); return i; }
+// Pre-fetch URL stream khi video bắt đầu phát (background, QOS_CLASS_UTILITY) để bấm PiP là dùng ngay
+- (void)prepareForVideo:(NSString *)videoID {
+    if (!videoID.length || [videoID isEqualToString:self.preparedVideoID]) return;
+    self.preparedURL = nil;
+    self.preparedVideoID = videoID;
+    dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+        NSDictionary *json = AutoACFetchPlayer(videoID, AutoACFetchVisitor());
+        NSDictionary *streaming = [json[@"streamingData"] isKindOfClass:NSDictionary.class] ? json[@"streamingData"] : nil;
+        NSURL *url = nil;
+        NSInteger bestHeight = -1;
+        for (NSDictionary *f in streaming[@"formats"]) {
+            NSString *u = f[@"url"];
+            if (![u isKindOfClass:NSString.class] || ![[f[@"mimeType"] description] containsString:@"video/mp4"]) continue;
+            if ([f[@"height"] integerValue] > bestHeight) { bestHeight = [f[@"height"] integerValue]; url = [NSURL URLWithString:u]; }
+        }
+        if (!url && [streaming[@"hlsManifestUrl"] isKindOfClass:NSString.class]) url = [NSURL URLWithString:streaming[@"hlsManifestUrl"]];
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([videoID isEqualToString:self.preparedVideoID] && url) self.preparedURL = url;
+        });
+    });
+}
 - (void)callOnYouTube:(NSArray<NSString *> *)names {
     for (NSString *name in names) {
         SEL sel = NSSelectorFromString(name);
@@ -11969,6 +11994,14 @@ static double AutoACPlayerDouble(id player, NSArray<NSString *> *names);
     self.busy = YES;
     self.startedAt = CACurrentMediaTime();
     double time = AutoACPlayerDouble(gPlayerVC, @[@"currentVideoMediaTime", @"currentVideoTime"]);
+    // Nếu đã pre-fetch URL cho video này → dùng ngay, không cần chờ fetch lại (loại bỏ delay 1–3 giây)
+    NSURL *cached = [videoID isEqualToString:self.preparedVideoID] ? self.preparedURL : nil;
+    if (cached) {
+        [self callOnYouTube:@[@"pause", @"suspendPlayback"]];
+        [self launchPiPWithURL:cached time:time];
+        return;
+    }
+    // Fallback: fetch URL (slow path khi pre-fetch chưa xong hoặc video đổi)
     dispatch_async(dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0), ^{
         NSDictionary *json = AutoACFetchPlayer(videoID, AutoACFetchVisitor());
         NSDictionary *streaming = [json[@"streamingData"] isKindOfClass:NSDictionary.class] ? json[@"streamingData"] : nil;
@@ -11987,21 +12020,24 @@ static double AutoACPlayerDouble(id player, NSArray<NSString *> *names);
                 return;
             }
             [self callOnYouTube:@[@"pause", @"suspendPlayback"]];
-            self.player = [AVPlayer playerWithURL:url];
-            self.player.allowsExternalPlayback = YES;
-            self.host = [[UIView alloc] initWithFrame:CGRectMake(-1000, -1000, 400, 300)];
-            self.layer = [AVPlayerLayer playerLayerWithPlayer:self.player];
-            self.layer.frame = self.host.bounds;
-            [self.host.layer addSublayer:self.layer];
-            [AutoACKeyWindow() addSubview:self.host];
-            [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
-            [[AVAudioSession sharedInstance] setActive:YES error:nil];
-            self.controller = [[AVPictureInPictureController alloc] initWithPlayerLayer:self.layer];
-            self.controller.delegate = self;
-            if (time > 0) [self.player seekToTime:CMTimeMakeWithSeconds(time, 600) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
-            [self tryStart:12];
+            [self launchPiPWithURL:url time:time];
         });
     });
+}
+- (void)launchPiPWithURL:(NSURL *)url time:(double)time {
+    self.player = [AVPlayer playerWithURL:url];
+    self.player.allowsExternalPlayback = YES;
+    self.host = [[UIView alloc] initWithFrame:CGRectMake(-1000, -1000, 400, 300)];
+    self.layer = [AVPlayerLayer playerLayerWithPlayer:self.player];
+    self.layer.frame = self.host.bounds;
+    [self.host.layer addSublayer:self.layer];
+    [AutoACKeyWindow() addSubview:self.host];
+    [[AVAudioSession sharedInstance] setCategory:AVAudioSessionCategoryPlayback error:nil];
+    [[AVAudioSession sharedInstance] setActive:YES error:nil];
+    self.controller = [[AVPictureInPictureController alloc] initWithPlayerLayer:self.layer];
+    self.controller.delegate = self;
+    if (time > 0) [self.player seekToTime:CMTimeMakeWithSeconds(time, 600) toleranceBefore:kCMTimeZero toleranceAfter:kCMTimeZero];
+    [self tryStart:12];
 }
 - (void)tryStart:(NSInteger)attempts {
     if (self.controller.isPictureInPicturePossible) {
@@ -12806,6 +12842,16 @@ static void AutoACEnsurePlayerFloat(UIView *overlay);
         if (fabs(b.alpha - alpha) > 0.01) b.alpha = alpha;
         b.userInteractionEnabled = alpha > 0.05;
     }
+    // Cột trái/phải cũng mờ/hiện theo bánh răng (giống hàng trên/dưới)
+    for (int _ci = 0; _ci < 2; _ci++) {
+        const void *colKey = (_ci == 0) ? kAutoACLeftColKey : kAutoACRightColKey;
+        NSDictionary<NSString *, UIButton *> *cols = objc_getAssociatedObject(overlay, colKey);
+        for (UIButton *cb in cols.allValues) {
+            if (cb.hidden) continue;
+            if (fabs(cb.alpha - alpha) > 0.01) cb.alpha = alpha;
+            cb.userInteractionEnabled = alpha > 0.05;
+        }
+    }
 }
 @end
 
@@ -12990,23 +13036,44 @@ static void AutoACEnsureVerticalColumn(UIView *overlay, BOOL rightColumn) {
         buttons = [NSMutableDictionary dictionary];
         objc_setAssociatedObject(overlay, toolsKey, buttons, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    // Vùng hiển thị: chừa vùng trên (top bar ~44pt) và vùng dưới (bottom bar ~56pt)
-    CGFloat topY = 44.0, botY = H - 56.0;
+    // Vùng hiển thị: tránh hàng trên (bên dưới top bar + kFloatSize nút trên) và hàng dưới (bottom bar + kFloatSize nút dưới)
+    UIView *gear = objc_getAssociatedObject(overlay, &kAutoACGearKey);
+    CGFloat topY = 44.0 + kFloatSize + 10.0;
+    if (gear) {
+        CGRect g = [overlay convertRect:gear.bounds fromView:gear];
+        if (CGRectGetMaxY(g) > 10) topY = CGRectGetMaxY(g) + kFloatSize + 10.0;
+    }
+    CGFloat botY = H - 56.0 - kFloatSize - 8.0;
     if (botY - topY < kFloatSize) { for (UIButton *b in buttons.allValues) b.hidden = YES; return; }
-    NSInteger maxCount = MAX(1, (NSInteger)floor((botY - topY + 6.0) / (kFloatSize + 6.0)));
-    NSInteger count = (NSInteger)MIN((NSInteger)tools.count, maxCount);
+    // Auto-size: điều chỉnh cỡ icon và gap để hiển thị đủ tất cả nút trong vùng khả dụng (không bỏ sót nút nào)
+    NSInteger count = (NSInteger)tools.count;
+    CGFloat iconSize = kFloatSize, gap = 6.0;
+    if (count > 1) {
+        CGFloat available = botY - topY;
+        CGFloat needed = count * iconSize + (count - 1) * gap;
+        if (needed > available) {
+            gap = MAX(2.0, (available - count * iconSize) / (CGFloat)(count - 1));
+            if (count * iconSize + (count - 1) * gap > available) {
+                iconSize = MAX(26.0, (available - (CGFloat)(count - 1) * 2.0) / (CGFloat)count);
+                gap = 2.0;
+            }
+        }
+    }
+    NSInteger maxCount = MAX(1, (NSInteger)floor((botY - topY + gap) / (iconSize + gap)));
+    count = MIN(count, maxCount);
     // Chữ ký: nếu không thay đổi thì bỏ qua
-    NSMutableString *sig = [NSMutableString stringWithFormat:@"%.0f|%.0f|%ld|", w, H, (long)count];
+    NSMutableString *sig = [NSMutableString stringWithFormat:@"%.0f|%.0f|%ld|%.0f|%.0f|", w, H, (long)count, iconSize, gap];
     for (NSDictionary *tool in tools) [sig appendString:tool[@"title"]];
     NSString *prevSig = objc_getAssociatedObject(overlay, sigKey);
     BOOL allPresent = YES;
     for (NSDictionary *tool in tools) if (!buttons[tool[@"title"]] || buttons[tool[@"title"]].superview != overlay || buttons[tool[@"title"]].hidden) { allPresent = NO; break; }
     if (allPresent && [sig isEqualToString:prevSig ?: @""]) return;
     objc_setAssociatedObject(overlay, sigKey, [sig copy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
-    // Vị trí X của cột
-    CGFloat colX = rightColumn ? (w - overlay.safeAreaInsets.right - 6.0 - kFloatSize) : (overlay.safeAreaInsets.left + 6.0);
+    // Vị trí X: thêm margin 14pt từ safe area để không sát mép màn hình (đặc biệt landscape)
+    CGFloat safeL = MAX(overlay.safeAreaInsets.left, 10.0), safeR = MAX(overlay.safeAreaInsets.right, 10.0);
+    CGFloat colX = rightColumn ? (w - safeR - 14.0 - kFloatSize) : (safeL + 14.0);
     // Căn giữa dọc trong vùng khả dụng
-    CGFloat totalH = (CGFloat)count * kFloatSize + (CGFloat)MAX(count - 1, 0) * 6.0;
+    CGFloat totalH = (CGFloat)count * iconSize + (CGFloat)MAX(count - 1, 0) * gap;
     CGFloat startY = topY + (botY - topY - totalH) / 2;
     NSMutableSet<NSString *> *wanted = [NSMutableSet set];
     for (NSInteger i = 0; i < count; i++) {
@@ -13016,9 +13083,8 @@ static void AutoACEnsureVerticalColumn(UIView *overlay, BOOL rightColumn) {
         UIButton *b = buttons[title];
         if (!b) { b = AutoACMakeToolButton(tool); buttons[title] = b; }
         if (b.superview != overlay) [overlay addSubview:b];
-        CGFloat size = [tool[@"size"] doubleValue];
-        CGFloat cy = startY + (CGFloat)i * (kFloatSize + 6.0);
-        CGRect frame = CGRectMake(round(colX + (kFloatSize - size) / 2), round(cy + (kFloatSize - size) / 2), size, size);
+        CGFloat cy = startY + (CGFloat)i * (iconSize + gap);
+        CGRect frame = CGRectMake(round(colX + (kFloatSize - iconSize) / 2), round(cy + (kFloatSize - iconSize) / 2), iconSize, iconSize);
         if (!CGRectEqualToRect(b.frame, frame)) b.frame = frame;
         AutoACApplyToolGlass(b);
         b.hidden = NO;
@@ -14472,6 +14538,7 @@ static void AutoACInstallFeatureHooks(void) {
             AutoACTrace("didActivate: original done");
             gPlayerVC = self_;
             [[AutoACPiP shared] stopForYouTube];
+            if ([kPrefs boolForKey:kPlayerPiPKey]) [[AutoACPiP shared] prepareForVideo:AutoACCurrentVideoID()];   // pre-fetch stream URL để bấm PiP là dùng ngay
             if ([kPrefs boolForKey:kSubsDeviceLangKey]) AutoACScheduleDeviceCaptions(self_);
             AutoACSponsorLoad(AutoACCurrentVideoID());
             AutoACTrace("didActivate: end");
