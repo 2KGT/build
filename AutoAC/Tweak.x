@@ -7146,7 +7146,7 @@ static void AutoACOverlayMigrateLegacy(void) {
 // Nút = đĩa 44 + 4 + chữ 14 = 62; khung chừa đều 12pt trên/dưới/trái/phải nên cao 62 + 24
 // Khung trình phát thu nhỏ (≈ 1/2 cỡ thật): nút tròn 20 pt, bước 26 pt; vẫn đủ chỗ cho nhiều nút
 // Khung "Giao diện phát" là bản thu nhỏ ĐÚNG TỈ LỆ của trình phát thật (ngang ≈ 844 × 390 pt): mọi kích thước (nút 36, bước 44, lề, hàng) nhân cùng hệ số gOverlayK
-static const CGFloat kOverlayBoardHeight = 515.0;
+static const CGFloat kOverlayBoardHeight = 548.0;
 static CGFloat gOverlayK = 0.4;
 static CGFloat AutoACOverlayNat(void) { return 22.0; }          // đường kính nút tròn
 static CGFloat AutoACOverlayGap(void) { return 4.0; } // khoảng cách giữa hai nút
@@ -7725,9 +7725,9 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
     // hai cột dọc: trái và phải, căn từ mép trên dải công cụ → mép dưới dải bottom (đồng bộ với 2 thanh ngang)
     if (self.strips.count > 4) {
         CGFloat colW = nat + 10.0;    // hơi rộng hơn nút để có viền
-        CGFloat colTop = my + toolsC - stripH / 2;
-        CGFloat colBot = my + botC + stripH / 2;
-        CGFloat colH = colBot - colTop;
+        CGFloat colTop = my + toolsC + stripH / 2 + 6;   // mép dưới dải công cụ + 6pt gap
+        CGFloat colBot = my + botC - stripH / 2 - 6;    // mép trên dải bottom - 6pt gap
+        CGFloat colH = MAX(colBot - colTop, 0);
         self.strips[3].frame = CGRectMake(0, colTop, colW, colH);
         self.strips[4].frame = CGRectMake(width - colW, colTop, colW, colH);
         for (NSUInteger i = 3; i <= 4; i++) {
@@ -10871,8 +10871,17 @@ static void AutoACInstallShortsShelfHooks(void) {
                 if (!upsell && aiOn && !blocked && ident.length > 0 && AutoACLooksAIGenerated(ident)) upsell = YES;
             }
             if ((shelf || upsell) && indexPath && [self_ respondsToSelector:@selector(deleteItemsAtIndexPaths:)]) {
-                @try { [self_ deleteItemsAtIndexPaths:@[indexPath]]; } @catch (__unused NSException *e) {}
                 if (shelf) gDropShelf++; else gDropBanner++;
+                // Trì hoãn xóa ô sang vòng run-loop tiếp theo để tránh xung đột với vòng cập nhật
+                // hiện tại của collection view (gọi deleteItemsAtIndexPaths: ngay trong
+                // cellForItemAtIndexPath: gây lỗi "Invalid update" và màn trắng)
+                __weak UICollectionView *weakCV = self_;
+                NSIndexPath *ip = indexPath;
+                dispatch_async(dispatch_get_main_queue(), ^{
+                    UICollectionView *cv = weakCV;
+                    if (!cv) return;
+                    @try { [cv deleteItemsAtIndexPaths:@[ip]]; } @catch (__unused NSException *e) {}
+                });
                 return ((id (*)(id, SEL, id))original)(self_, selector, indexPath);
             }
             return cell;
@@ -11415,6 +11424,11 @@ static UIButton *AutoACMakeFloatingButton(NSString *symbol, CGFloat glyph, void 
         ACGBarSpring(down ? 0.22 : 0.38, down ? 0.8 : 0.62, 0.0, ^{
             b.layer.sublayerTransform = down ? CATransform3DMakeScale(1.14, 1.14, 1.0) : CATransform3DIdentity;   // nổi lên rồi bật về như kính tương tác iOS 26 (dọc và ngang như nhau)
         }, nil);
+        // Màu nền sáng lên khi nhấn — phát sáng trên nền kính hoặc nền đặc
+        UIVisualEffectView *ev = nil;
+        for (UIView *s in b.subviews) if ([s isKindOfClass:[UIVisualEffectView class]]) { ev = (UIVisualEffectView *)s; break; }
+        if (ev) ev.contentView.backgroundColor = down ? [UIColor colorWithWhite:1.0 alpha:0.28] : [UIColor colorWithWhite:0.0 alpha:0.30];
+        else b.backgroundColor = [UIColor colorWithWhite:1.0 alpha:down ? 0.30 : 0.12];
     };
     [button addAction:[UIAction actionWithHandler:^(__kindof UIAction *a) { press(YES); }] forControlEvents:UIControlEventTouchDown | UIControlEventTouchDragEnter];
     [button addAction:[UIAction actionWithHandler:^(__kindof UIAction *a) { press(NO); }]
