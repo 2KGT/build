@@ -5,6 +5,18 @@
 - Yêu cầu iOS 14.0 trở lên.
 - Xóa phiên bản cũ trước khi cài đặt bản mới này.
 
+## [2.1.115] — 2026-11-20 18:57 (GMT+7)
+
+- **Cấp độ:** Patch (Vá lỗi) · 2.1.114 → 2.1.115
+- **Build:** [#96](https://github.com/2KGT/build/actions/runs/44731323478) · macOS · commit `b3c77a3` · bởi @2KGT
+- **Gói:** `com.kyic.autoac_2.1.115_iphoneos-arm64.deb` (385.8 KB, sha256 `7d963c90e5d9…`)
+- **Nhật ký:** 4 cảnh báo, 0 lỗi, 58 giây
+- **YouTube X** (https://github.com/PoomSmart/YouTube-X @ `9a8e60a`): v1.7.24 · MIT — không đổi so với lần build trước
+- **NoYTPremium** (https://github.com/PoomSmart/NoYTPremium @ `0ae2f17`): v1.0.7 · MIT — không đổi so với lần build trước
+
+### Thay đổi
+- `31cb60c2b` Add files via upload
+
 ## [2.1.114] — 2026-11-20 13:22 (GMT+7)
 
 - **Cấp độ:** Patch (Vá lỗi) · 2.1.113 → 2.1.114
