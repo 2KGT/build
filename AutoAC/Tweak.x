@@ -22,7 +22,7 @@
 #import "BuildInfo.h"
 #endif
 #ifndef TWEAK_BUILD_VERSION
-#define TWEAK_BUILD_VERSION @"2.1.108"
+#define TWEAK_BUILD_VERSION @"2.1.109"
 #endif
 #ifndef TWEAK_UPSTREAM_COUNT
 #define TWEAK_UPSTREAM_COUNT 0
@@ -90,7 +90,7 @@ typedef id (^AutoACHookMaker)(IMP original, SEL selector);
 static BOOL AutoACHook(NSString *className, NSString *selectorName, BOOL classMethod,
                        const char *prefix, AutoACHookMaker maker);
 
-static NSString *const kCurrentBuildID = @"2.1.108";
+static NSString *const kCurrentBuildID = @"2.1.109";
 
 // ── Nhật ký lỗi: ghi dấu vết và nguyên nhân crash vào Documents/AutoAC_crash.log ──
 static int gTraceFD = -1;
@@ -7724,12 +7724,13 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
     self.strips[1].backgroundColor = [UIColor colorWithRed:0.45 green:0.30 blue:0.75 alpha:0.30];
     // hai cột dọc: trái và phải, căn từ mép trên dải công cụ → mép dưới dải bottom (đồng bộ với 2 thanh ngang)
     if (self.strips.count > 4) {
-        CGFloat colW = nat + 10.0;    // hơi rộng hơn nút để có viền
+        CGFloat colW = stripH;   // đồng bộ độ dày với thanh ngang (28pt), tạo góc vuông khi nối nhau
         CGFloat colTop = my + toolsC + stripH / 2 + 6;   // mép dưới dải công cụ + 6pt gap
-        CGFloat colBot = my + botC - stripH / 2 - 6;    // mép trên dải bottom - 6pt gap
+        CGFloat colBot = my + botC - stripH / 2 - 6;     // mép trên dải bottom - 6pt gap
         CGFloat colH = MAX(colBot - colTop, 0);
-        self.strips[3].frame = CGRectMake(0, colTop, colW, colH);
-        self.strips[4].frame = CGRectMake(width - colW, colTop, colW, colH);
+        // Thẳng hàng với 2 thanh ngang: cột trái bắt đầu từ rm, cột phải kết thúc tại width - rm
+        self.strips[3].frame = CGRectMake(rm, colTop, colW, colH);
+        self.strips[4].frame = CGRectMake(width - rm - colW, colTop, colW, colH);
         for (NSUInteger i = 3; i <= 4; i++) {
             self.strips[i].layer.cornerRadius = colW / 2;
             self.hints[i].frame = self.strips[i].bounds;
@@ -10615,11 +10616,19 @@ static void AutoACFinishStartup(UIViewController *controller) {
 
 static void AutoACInstallStartupHooks(void) {
     for (NSString *cls in @[@"YTStartupAnimationViewController", @"YTRiveStartupAnimationViewController"]) {
+        // Hook viewWillAppear: để ẩn trước khi view lên màn hình — tránh thấy ảnh khởi động dù một khung hình
+        AutoACHook(cls, @"viewWillAppear:", NO, "v", ^id(IMP original, SEL selector) {
+            return ^void(UIViewController *self_, BOOL animated) {
+                if ([kPrefs boolForKey:kNoLaunchAnimKey]) self_.view.alpha = 0.0;
+                if (original) ((void (*)(id, SEL, BOOL))original)(self_, selector, animated);
+            };
+        });
+        // Hook viewDidAppear: để kết thúc startup controller ngay khi xuất hiện (đã transparent)
         AutoACHook(cls, @"viewDidAppear:", NO, "v", ^id(IMP original, SEL selector) {
             return ^void(UIViewController *self_, BOOL animated) {
                 if (original) ((void (*)(id, SEL, BOOL))original)(self_, selector, animated);
                 if ([kPrefs boolForKey:kNoLaunchAnimKey]) {
-                    dispatch_async(dispatch_get_main_queue(), ^{ AutoACFinishStartup(self_); });
+                    AutoACFinishStartup(self_);   // gọi đồng bộ — view đã transparent, không cần delay
                 }
             };
         });
