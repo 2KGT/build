@@ -7916,27 +7916,44 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
     [self rebuildAnimated:YES];
 }
 
-- (NSInteger)stripAtY:(CGFloat)y {
+// Tìm strip gần nhất dùng khoảng cách 2D từ điểm đến hình chữ nhật strip (tránh cột trái luôn thắng cột phải vì chung Y-range)
+- (NSInteger)stripAtPoint:(CGPoint)p {
     NSInteger best = 0;
     CGFloat bestDistance = CGFLOAT_MAX;
     NSInteger count = (NSInteger)MIN(self.strips.count, self.lists.count);
     for (NSInteger s = 0; s < count; s++) {
         CGRect frame = self.strips[(NSUInteger)s].frame;
-        CGFloat distance = y < CGRectGetMinY(frame) ? CGRectGetMinY(frame) - y : (y > CGRectGetMaxY(frame) ? y - CGRectGetMaxY(frame) : 0);
+        CGFloat dx = MAX(0, MAX(CGRectGetMinX(frame) - p.x, p.x - CGRectGetMaxX(frame)));
+        CGFloat dy = MAX(0, MAX(CGRectGetMinY(frame) - p.y, p.y - CGRectGetMaxY(frame)));
+        CGFloat distance = sqrt(dx * dx + dy * dy);
         if (distance < bestDistance) { bestDistance = distance; best = s; }
     }
     return best;
 }
 
-// Vị trí chèn theo toạ độ ngang, tính trên bố cục KHÔNG có chỗ trống (để chỗ trống không làm các nút nhảy qua lại)
-- (NSInteger)slotAtX:(CGFloat)x inStrip:(NSInteger)strip {
+// Vị trí chèn theo toạ độ điểm kéo. Hàng ngang (s<3) dùng trục X; cột dọc (s≥3) dùng trục Y.
+- (NSInteger)slotAtPoint:(CGPoint)p inStrip:(NSInteger)strip {
     NSString *dragKey = AutoACOverlayKey(self.dragChip.strip, self.dragChip.ident);
     NSInteger count = 0;
     for (NSString *ident in self.lists[(NSUInteger)strip]) if (![AutoACOverlayKey(strip, ident) isEqualToString:dragKey]) count++;
+    if (strip >= 3) {
+        // Cột dọc: đếm bao nhiêu chip có tâm ở phía trên điểm kéo
+        CGFloat nat = AutoACOverlayNat(), gap = AutoACOverlayGap();
+        UIView *sv = self.strips[(NSUInteger)strip];
+        CGFloat colH = CGRectGetHeight(sv.frame);
+        NSInteger maxSlots = MAX(1, (NSInteger)floor((colH + gap) / (nat + gap)));
+        NSInteger vis = MIN(count + 1, maxSlots);
+        CGFloat totalH = (CGFloat)vis * nat + (CGFloat)MAX(vis - 1, 0) * gap;
+        CGFloat startY = CGRectGetMinY(sv.frame) + (colH - totalH) / 2;
+        NSInteger index = 0;
+        for (NSInteger i = 0; i < count; i++) if (startY + (CGFloat)i * (nat + gap) + nat / 2 < p.y) index++;
+        return index;
+    }
+    // Hàng ngang: vị trí chèn theo trục X (không có chỗ trống để tránh nút nhảy qua lại)
     CGFloat chipWidth = 58, gap = 10, boardWidth = CGRectGetWidth(self.bounds);
     AutoACOverlayMetrics(strip, count, strip < 2 ? AutoACOverlayEdge(strip, boardWidth) - 8 : boardWidth, &chipWidth, &gap);
     NSInteger index = 0;
-    for (NSInteger i = 0; i < count; i++) if ([self chipX:strip slot:i slots:count width:chipWidth gap:gap board:boardWidth] + chipWidth / 2 < x) index++;
+    for (NSInteger i = 0; i < count; i++) if ([self chipX:strip slot:i slots:count width:chipWidth gap:gap board:boardWidth] + chipWidth / 2 < p.x) index++;
     return index;
 }
 
@@ -7979,8 +7996,8 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
         case UIGestureRecognizerStateChanged: {
             if (chip != self.dragChip) return;
             chip.center = CGPointMake(p.x - self.grab.x, p.y - self.grab.y);
-            NSInteger strip = [self stripAtY:p.y];
-            NSInteger slot = [self slotAtX:p.x inStrip:strip];
+            NSInteger strip = [self stripAtPoint:p];
+            NSInteger slot = [self slotAtPoint:p inStrip:strip];
             if (strip != self.holeStrip || slot != self.holeIndex) {
                 self.holeStrip = strip;
                 self.holeIndex = slot;
@@ -9205,7 +9222,7 @@ static NSArray<AutoACItem *> *AutoACBuildItems(void) {
         AutoACT(@"Xoá các video có nhãn nội dung do AI tạo / đã chỉnh sửa bằng AI khỏi toàn bộ danh sách trong app (trang chủ, tìm kiếm, đề xuất...). Không xoá ở trang đang xem."), nil)];
 
     // ── Tải xuống ──
-    [items addObject:ACSwitch(AutoACT(@"Tải xuống"), AutoACT(@"Hỏi nơi lưu"), AutoACT(@"Ảnh hoặc bảng chia sẻ"), @"folder.fill",
+    [items addObject:ACSwitch(AutoACT(@"Tải xuống"), AutoACT(@"Hỏi vị trí lưu"), AutoACT(@"Ảnh hoặc bảng chia sẻ"), @"folder.fill",
         UIColor.systemOrangeColor, kAskDestKey,
         AutoACT(@"Trước khi tải video, hỏi lưu vào Ảnh hay mở bảng chia sẻ. Tắt đi sẽ theo tuỳ chọn Mở bảng chia sẻ."), nil)];
     [items addObject:ACSwitch(AutoACT(@"Tải xuống"), AutoACT(@"Hỏi chất lượng"), AutoACT(@"Chọn trước khi tải"), @"slider.horizontal.3",
@@ -10905,6 +10922,11 @@ static void AutoACInstallShortsShelfHooks(void) {
                 dispatch_async(dispatch_get_main_queue(), ^{
                     UICollectionView *cv = weakCV;
                     if (!cv) return;
+                    // Kiểm tra bounds trước khi xoá: data source có thể thay đổi giữa hai lần gọi,
+                    // nếu xoá sai vị trí sẽ gây "Invalid update" và collection view hiển thị trắng
+                    NSInteger sec = ip.section;
+                    if ([cv numberOfSections] <= sec) return;
+                    if ([cv numberOfItemsInSection:sec] <= ip.item) return;
                     @try { [cv deleteItemsAtIndexPaths:@[ip]]; } @catch (__unused NSException *e) {}
                 });
                 return cell;   // dùng cell đã lấy ở đầu, tránh gọi original lần 2 (gây double-dequeue)
@@ -11427,7 +11449,7 @@ static void AutoACOpenDownloadMenu(UIView *from, BOOL inShorts) {
 }
 
 // Tạo nút tròn nổi; đặt bằng frame (không dùng Auto Layout) để không phải bố cục lại trong layoutSubviews
-static const CGFloat kFloatSize = 34;   // cỡ vòng kính của nút nổi: icon 22pt nằm giữa, chừa viền kính rộng hơn (trước 36)
+static const CGFloat kFloatSize = 32;   // cỡ vòng kính của nút nổi: icon 22pt nằm giữa, chừa viền kính rộng hơn (trước 34)
 static UIButton *AutoACMakeFloatingButton(NSString *symbol, CGFloat glyph, void (^tap)(void)) {
     UIButton *button = [UIButton buttonWithType:UIButtonTypeSystem];
     button.accessibilityLabel = @"AutoAC";
@@ -13071,7 +13093,7 @@ static void AutoACEnsureVerticalColumn(UIView *overlay, BOOL rightColumn) {
     objc_setAssociatedObject(overlay, sigKey, [sig copy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     // Vị trí X: thêm margin 14pt từ safe area để không sát mép màn hình (đặc biệt landscape)
     CGFloat safeL = MAX(overlay.safeAreaInsets.left, 10.0), safeR = MAX(overlay.safeAreaInsets.right, 10.0);
-    CGFloat colX = rightColumn ? (w - safeR - 14.0 - kFloatSize) : (safeL + 14.0);
+    CGFloat colX = rightColumn ? (w - safeR - 22.0 - kFloatSize) : (safeL + 14.0);   // cột phải lùi vào thêm 8pt tránh nằm trong viền pillarbox
     // Căn giữa dọc trong vùng khả dụng
     CGFloat totalH = (CGFloat)count * iconSize + (CGFloat)MAX(count - 1, 0) * gap;
     CGFloat startY = topY + (botY - topY - totalH) / 2;
@@ -14884,7 +14906,7 @@ static NSDictionary<NSString *, NSString *> *AutoACEnglishTable(void) {
         @"Hẹn giờ": @"Timer",
         @"Học tập": @"Learning",
         @"Hỏi chất lượng": @"Ask quality",
-        @"Hỏi nơi lưu": @"Ask where to save",
+        @"Hỏi vị trí lưu": @"Ask where to save",
         @"Khi chạm dừng video": @"When tapping to pause a video",
         @"Khi tắt màn hình": @"When the screen turns off",
         @"Khi video báo \"Đã xảy ra lỗi, nhấn để thử lại\" hoặc đứng hình, AutoAC tự tải lại luồng phát và tua về đúng vị trí đang xem. Cần mở lại app.": @"When a video shows \"An error occurred, tap to retry\" or freezes, AutoAC reloads the stream and seeks back to where you were. Restart the app to apply.",
