@@ -22,7 +22,7 @@
 #import "BuildInfo.h"
 #endif
 #ifndef TWEAK_BUILD_VERSION
-#define TWEAK_BUILD_VERSION @"2.1.111"
+#define TWEAK_BUILD_VERSION @"2.1.112"
 #endif
 #ifndef TWEAK_UPSTREAM_COUNT
 #define TWEAK_UPSTREAM_COUNT 0
@@ -90,7 +90,7 @@ typedef id (^AutoACHookMaker)(IMP original, SEL selector);
 static BOOL AutoACHook(NSString *className, NSString *selectorName, BOOL classMethod,
                        const char *prefix, AutoACHookMaker maker);
 
-static NSString *const kCurrentBuildID = @"2.1.111";
+static NSString *const kCurrentBuildID = @"2.1.112";
 
 // ── Nhật ký lỗi: ghi dấu vết và nguyên nhân crash vào Documents/AutoAC_crash.log ──
 static int gTraceFD = -1;
