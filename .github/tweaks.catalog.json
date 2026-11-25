@@ -1,5 +1,5 @@
 {
-  "_version": "1.1.0 | 2026-11-06 | bỏ YTLite của tác giả; chia tweak bên thứ ba thành gói video/ui/khac",
+  "_version": "1.1.0 | 2026-11-06 | chia tweak bên thứ ba thành gói video/ui/khac",
   "_doc": "Danh mục tweak cho workflow Build Multi & Ký IPA. Token trong ô 'Thêm / bớt tweak': tên (hoặc tên@phiên_bản) | preset:video|ui|khac|youmod | repo:Dự_án | link http(s) | file:đường_dẫn | -tên (bớt). kind: source (clone + Theos make) | release | sparse (lấy một thư mục, vd .appex) | url.",
   "defaults": {
     "build_args": "DEBUG=0 FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless",
