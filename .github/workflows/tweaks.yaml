@@ -95,7 +95,7 @@ jobs:
   # JOB 1 — PLAN: quyết định build dự án nào (nhẹ, chạy trên Ubuntu)
   # ════════════════════════════════════════════════════════════════
   plan:
-    name: 🗓️ Lập kế hoạch
+    name: 🗺️ Lập kế hoạch
     runs-on: ubuntu-latest
     timeout-minutes: 5
     outputs:
@@ -129,7 +129,7 @@ jobs:
           fi
           echo "✅ Lựa chọn hợp lệ — Dylib=$ECO_DYLIB Rootful=$ECO_ROOTFUL Rootless=$ECO_ROOTLESS Release=$DO_RELEASE Sileo=$DO_PUBLISH"
 
-      - name: 📋 Xác định dự án cần build (plan.py)
+      - name: 🗺️ Xác định dự án cần build (plan.py)
         id: plan
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -180,7 +180,7 @@ jobs:
           MATRIX: ${{ needs.plan.outputs.matrix }}
         run: python3 .github/scripts/hooks.py check-all --matrix "$MATRIX"
 
-      - name: 🛠️ Gọi Hook-Fix cho dump có hook hỏng (nếu chưa có PR chờ duyệt)
+      - name: 🔧 Gọi Hook-Fix cho dump có hook hỏng (nếu chưa có PR chờ duyệt)
         if: steps.check.outputs.broken != '' && steps.check.outputs.broken != '0'
         env:
           BROKEN_DUMPS: ${{ steps.check.outputs.broken_dumps }}

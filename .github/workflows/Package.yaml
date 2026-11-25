@@ -1,13 +1,14 @@
-# version: 3.0.2 | 2026-11-06 | đổi tên workflow thành "Build Multi & Ký IPA"; nội dung giữ nguyên | cần package_engine.py >= 2.1.0
-name: Build Multi IPA SignCer
+# version: 3.1.0 | 2026-11-06 | ô Bộ tweak liệt kê thẳng dự án của bạn (tự thành repo:Tên), bỏ YTLite của tác giả; gói preset:video/ui/khac; tweak bên thứ ba lỗi thì bỏ qua (strict=1 để dừng) | cần package_engine.py >= 2.2.0
+name: Build Multi & Ký IPA
 
 # Tên mỗi lần chạy hiện rõ trong danh sách Actions (đỡ phải mở từng cái)
 run-name: ${{ inputs.preset }} → ${{ inputs.output }} · ${{ inputs.sign }}
 
 # ┌─ CÁCH ĐIỀN FORM: đi từ 1 xuống 5, bước 6 và hai nút cuối có thể bỏ qua ──────
-# │ 1 Bộ tweak      chọn sẵn: YouMod đầy đủ · YTLite · YTLite đầy đủ · Chỉ ký lại IPA · Tự chọn
+# │ 1 Bộ tweak      một dự án của bạn (AutoAC, YouMod...) · YouMod đầy đủ · Chỉ ký lại IPA · Tự chọn
 # │ 2 Thêm/bớt      để trống nếu bộ ở bước 1 đã đủ. Cú pháp (cách nhau dấu cách):
 # │                   ryd youpip        thêm tweak trong tweaks.catalog.json
+# │                   preset:video      thêm cả gói (video · ui · khac)
 # │                   -volboost         BỚT một tweak khỏi bộ đã chọn
 # │                   repo:YouMod       .deb tweaks.yml đã build (chưa có thì tự biên dịch)
 # │                   https://…/x.deb   link .deb / .dylib / .zip
@@ -15,9 +16,13 @@ run-name: ${{ inputs.preset }} → ${{ inputs.output }} · ${{ inputs.sign }}
 # │ 3 Link IPA      chỉ cần khi Đầu ra có IPA
 # │ 4 Đầu ra        IPA · .cyan · TrollFools · DEB + dylib · Tất cả
 # │ 5 Ký            Không ký · Ký giả (ldid) · Ký chứng chỉ (p12)
-# │ 6 Tuỳ chọn khác (tuỳ chọn) name="YouTube Plus" bundle=com.x.y flags=-uwe ent=path/ent.plist
-# │                 — bỏ trống = giữ nguyên tên/bundle gốc, cờ cyan mặc định -uwe
+# │ 6 Tuỳ chọn khác (tuỳ chọn) name="YouTube Plus" bundle=com.x.y flags=-uwe ent=path/ent.plist strict=1
+# │                 — bỏ trống = giữ nguyên tên/bundle gốc, cờ cyan -uwe, tweak bên thứ ba lỗi thì bỏ qua
+# │                 — strict=1 = dừng ngay khi bất kỳ tweak nào lỗi
 # │
+# │ Dự án của bạn lỗi → luôn dừng. Tweak bên thứ ba lỗi → bỏ qua, báo trong tóm tắt.
+# │ Thêm dự án mới vào danh sách chọn: sửa dòng options của input 'preset' bên dưới
+# │   (chưa thêm thì vẫn dùng được: gõ repo:Tên ở bước 2; Lập kế hoạch sẽ nhắc).# │
 # │ Ký giả       → TrollStore, TrollFools, jailbreak. Không cần secret.
 # │ Ký chứng chỉ → cài thường (sideload). Cần 3 secret: SIGN_P12_BASE64,
 # │                SIGN_P12_PASSWORD, SIGN_PROFILE_BASE64.
@@ -30,7 +35,7 @@ on:
         description: '1️⃣ Bộ tweak'
         type: choice
         default: '(chưa chọn)'
-        options: [ '(chưa chọn)', AutoAC, AutoDL, BiliBili, Facebook, Liquid, Yomost, YouMod, YTLite, Chỉ ký lại IPA, Tự chọn ]
+        options: [ '(chưa chọn)', 'AutoAC', 'AutoDL', 'BiliBili', 'Facebook', 'Liquid', 'Yomost', 'YouMod', 'YTLite', 'YouMod đầy đủ', 'Chỉ ký lại IPA', 'Tự chọn' ]
       extra:
         description: '2️⃣ Thêm / bớt tweak'
         required: false
@@ -86,10 +91,10 @@ jobs:
       needs_dpkg: ${{ steps.plan.outputs.needs_dpkg }}
       needs_fastlane: ${{ steps.plan.outputs.needs_fastlane }}
     env:
-      PKG_WORKFLOW_VERSION: '3.0.2'
-      REQUIRES_ENGINE: '2.1.0'      # package_engine.py phải từ bản này trở lên
-      TOKENS: ${{ inputs.preset == 'YouMod đầy đủ' && 'preset:youmod' || inputs.preset == 'YTLite' && 'preset:ytlite' || inputs.preset == 'YTLite đầy đủ' && 'preset:ytlite-full' || inputs.preset == 'Chỉ ký lại IPA' && 'none' || '' }} ${{ inputs.extra }}
-      NO_PRESET: ${{ inputs.preset == '(chưa chọn)' }}
+      PKG_WORKFLOW_VERSION: '3.1.0'
+      REQUIRES_ENGINE: '2.2.0'      # package_engine.py phải từ bản này trở lên
+      TOKENS: ${{ inputs.extra }}
+      PRESET: ${{ inputs.preset }}
       OPTIONS: ${{ inputs.options }}
       IPA_URL: ${{ inputs.ipa_url != '' && 'set' || '' }}   # plan chỉ cần biết có hay chưa
       OUT_IPA: ${{ inputs.output == 'IPA' || inputs.output == 'Tất cả' }}
@@ -103,8 +108,28 @@ jobs:
       - name: 📥 Checkout
         uses: actions/checkout@v4
 
+      - name: 🔤 Chuẩn hoá tên package_engine.py
+        run: |
+          # App trên điện thoại có thể lưu file thành "package engine.py" hoặc "package-engine.py".
+          # Nếu thiếu tên đúng thì dùng bản lưu sai tên cho lần chạy này và nhắc bạn đổi tên trong repo.
+          cd .github/scripts
+          if [ ! -f package_engine.py ]; then
+            for alt in "package engine.py" "package-engine.py"; do
+              if [ -f "$alt" ]; then
+                cp "$alt" package_engine.py
+                echo "::warning::Đang dùng file '$alt'. Hãy đổi tên nó thành package_engine.py (gạch dưới) trong repo."
+                break
+              fi
+            done
+          fi
+
       - name: 🧩 Kiểm tra phiên bản tương thích
         run: |
+          if [ ! -f .github/scripts/package_engine.py ]; then
+            echo "::error::Không thấy .github/scripts/package_engine.py. Tên file phải đúng là package_engine.py (dấu gạch dưới _, không phải gạch ngang hay dấu cách) và nằm trong .github/scripts/."
+            echo "Các file hiện có trong .github/scripts/:"; ls -1 .github/scripts
+            exit 1
+          fi
           ENGINE_VER=$(sed -n 's/^__version__ *= *"\([^"]*\)".*/\1/p' .github/scripts/package_engine.py | head -1)
           if [ -z "$ENGINE_VER" ]; then
             echo "::error::scripts/package_engine.py chưa có số phiên bản (bản quá cũ). Workflow $PKG_WORKFLOW_VERSION cần engine >= $REQUIRES_ENGINE — hãy thay file này."
@@ -134,7 +159,8 @@ jobs:
       contents: write     # tạo Release
       actions: read       # repo:<Dự án> đọc artifact của tweaks.yml
     env:
-      TOKENS: ${{ inputs.preset == 'YouMod đầy đủ' && 'preset:youmod' || inputs.preset == 'YTLite' && 'preset:ytlite' || inputs.preset == 'YTLite đầy đủ' && 'preset:ytlite-full' || inputs.preset == 'Chỉ ký lại IPA' && 'none' || '' }} ${{ inputs.extra }}
+      TOKENS: ${{ inputs.extra }}
+      PRESET: ${{ inputs.preset }}
       OPTIONS: ${{ inputs.options }}
       IPA_URL: ${{ inputs.ipa_url }}
       OUT_IPA: ${{ inputs.output == 'IPA' || inputs.output == 'Tất cả' }}
@@ -146,6 +172,21 @@ jobs:
     steps:
       - name: 📥 Checkout
         uses: actions/checkout@v4
+
+      - name: 🔤 Chuẩn hoá tên package_engine.py
+        run: |
+          # App trên điện thoại có thể lưu file thành "package engine.py" hoặc "package-engine.py".
+          # Nếu thiếu tên đúng thì dùng bản lưu sai tên cho lần chạy này và nhắc bạn đổi tên trong repo.
+          cd .github/scripts
+          if [ ! -f package_engine.py ]; then
+            for alt in "package engine.py" "package-engine.py"; do
+              if [ -f "$alt" ]; then
+                cp "$alt" package_engine.py
+                echo "::warning::Đang dùng file '$alt'. Hãy đổi tên nó thành package_engine.py (gạch dưới) trong repo."
+                break
+              fi
+            done
+          fi
 
       - name: 🙈 Ẩn link IPA khỏi log
         uses: levibostian/action-hide-sensitive-inputs@v1
