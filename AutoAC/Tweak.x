@@ -23,7 +23,7 @@
 #import "BuildInfo.h"
 #endif
 #ifndef TWEAK_BUILD_VERSION
-#define TWEAK_BUILD_VERSION @"2.1.136"
+#define TWEAK_BUILD_VERSION @"2.1.135"
 #endif
 #ifndef TWEAK_UPSTREAM_COUNT
 #define TWEAK_UPSTREAM_COUNT 0
@@ -10202,7 +10202,7 @@ static UIStackView *AutoACBuildInfoPage(NSArray<AutoACItem *> *items) {
     add(AutoACT(@"Tùy chỉnh YouTube\n"), [UIFont systemFontOfSize:13.5], UIColor.labelColor, tight);
 
     add(AutoACT(@"MÃ NGUỒN THAM KHẢO\n"), [UIFont systemFontOfSize:12 weight:UIFontWeightBold], UIColor.systemBlueColor, headPara);
-    NSString *src = AutoACT(@"Ghi công\n• YouTube X, NoYTPremium, YTLite, ytkace (kể cả Sideloading.x, dựa trên IAmYouTube của PoomSmart), dữ liệu SponsorBlock (sponsor.ajay.app)\n");
+    NSString *src = AutoACT(@"• Ghi công: YouTube X, NoYTPremium, Sideloading, IAmYouTube của PoomSmart, YTLite, ytkace, dữ liệu SponsorBlock (sponsor.ajay.app)\n");
     NSString *up = TWEAK_UPSTREAM_INFO;
     if (TWEAK_UPSTREAM_COUNT > 0 && up.length > 0) src = [src stringByAppendingFormat:AutoACT(@"• Đã tích hợp: %@\n"), up];
     add(src, [UIFont systemFontOfSize:13.5], UIColor.labelColor, tight);
@@ -16055,7 +16055,7 @@ static NSDictionary<NSString *, NSString *> *AutoACEnglishTable(void) {
         @"Loại đoạn tự bỏ qua": @"Segment types to skip",
         @"Tự bỏ qua, báo, loại đoạn": @"Auto skip, alerts, segment types",
         @"Cài đặt SponsorBlock (dữ liệu từ sponsor.ajay.app): bật tự bỏ qua, báo khi bỏ qua và chọn các loại đoạn sẽ tự bỏ qua: tài trợ, tự quảng bá, nhắc tương tác, mở đầu, kết, xem trước, phần không phải nhạc, đoạn thừa.": @"SponsorBlock settings (data from sponsor.ajay.app): turn on auto skip, get an alert when a segment is skipped, and choose which segment types to skip: sponsor, self-promotion, interaction reminders, intro, outro, preview, non-music sections, filler.",
-        @"Ghi công\n• YouTube X, NoYTPremium, YTLite, ytkace (kể cả Sideloading.x, dựa trên IAmYouTube của PoomSmart), dữ liệu SponsorBlock (sponsor.ajay.app)\n": @"Credits\n• YouTube X, NoYTPremium, YTLite, ytkace (including Sideloading.x, based on IAmYouTube by PoomSmart), SponsorBlock data (sponsor.ajay.app)\n",
+        @"• Ghi công: YouTube X, NoYTPremium, Sideloading, IAmYouTube của PoomSmart, YTLite, ytkace, dữ liệu SponsorBlock (sponsor.ajay.app)\n": @"• Credits: YouTube X, NoYTPremium, Sideloading, IAmYouTube by PoomSmart, YTLite, ytkace, SponsorBlock data (sponsor.ajay.app)\n",
         @"Lưu": @"Save",
         @"Lưu sau khi tải": @"Save after download",
         @"Lưu thành tệp .txt": @"Save as .txt file",
