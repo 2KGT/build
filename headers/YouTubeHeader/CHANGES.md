@@ -1,0 +1,95 @@
+# Thay đổi dump · YouTubeHeader
+
+- Phiên bản app: **21.45.4 → 21.46.3**
+- Class: **+157** mới · **−802** mất
+- Selector (trong class còn tồn tại): **+1883** · **−577**
+- Dự án có hook dùng dump này: `AutoAC`, `Liquid`
+
+## 🪝 Hook của bạn
+- ✅ 33 khớp · ⚠️ 0 có vấn đề · ℹ️ 20 chưa kiểm chứng được
+- Không có hook nào hỏng.
+
+## Class mất (tối đa 40)
+- `AFDBatchDataFetchRequest`
+- `AFDBatchDataFetchResponse`
+- `AFDBatchDataMutateRequest`
+- `AFDBatchDataMutateResponse`
+- `AFDBatchDataRequest`
+- `AFDBatchDataRequestHeader`
+- `AFDBatchDataResponse`
+- `AFDBatchDataResponseHeader`
+- `AFDClientInfo`
+- `AFDDataError`
+- `AFDDataErrorPayload`
+- `AFDDataFetch`
+- `AFDDataRequest`
+- `AFDDataResponse`
+- `AFDDataResponseWithError`
+- `AFDErrorMetadata`
+- `AFDMutateDataRequest`
+- `AFDMutateDataResponse`
+- `AFDMutateDataResponseWithError`
+- `AFDMutateOperation`
+- `AFDMutateOperationRequest`
+- `APMPlatformIdentitySupport`
+- `ASWAppSwitchingSKOverlayFeatureMode`
+- `ASWChromeDefaultPromoAnalyticsService`
+- `ASWClearcutEventSignature`
+- `ASWCollectionViewCell`
+- `ASWCollectionViewTextCell`
+- `ASWLoadingCell`
+- `ASWLogCatcher`
+- `ASWTransformerSource`
+- `ASWUniversalMetrics`
+- `ASWUniversalMetricsUtilities`
+- `ASWWebProduct`
+- `CADPAndroidClientInfo`
+- `CADPAndroidClientInfo_ExtensionVersion`
+- `CADPAndroidDeviceType`
+- `CADPBattlestarClientInfo`
+- `CADPBirdsongClientInfo`
+- `CADPBrowserInfo`
+- `CADPDesktopServicesClientInfo`
+
+## Class mới (tối đa 40)
+- `ALKCheckLinksForProviderRequest`
+- `ALKCheckLinksForProviderResponse`
+- `ALKLocalizationBundleFinder`
+- `ELMNBlurContentLayer`
+- `ELMNBlurPipeline`
+- `ELMPBBoxShadow`
+- `ELMPBDropShadow`
+- `FOOTCPMultiChoiceList_AccessibilityInfo`
+- `GAIGLImageMetadata`
+- `GAIGLUsageAttributes`
+- `GWA2CollapsingSelectorPlaceholderNode`
+- `GWA2DynamicContainerGridLayout`
+- `MDXConnectCommandHandlerImpl`
+- `MDXSmartPairingUseTVCodeCommandImpl`
+- `MDXYTPlaybackContextDecoratorImpl`
+- `MLPlatypusDiskCacheManager`
+- `MLPlatypusDiskCacheRoot`
+- `MLPlatypusDiskCacheTuning`
+- `MLPlatypusDiskChunkLoadTask`
+- `MLPlatypusDiskVideoCache`
+- `MLVideoDownloaderImpl`
+- `MLVideoDownloaderLifecycleImpl`
+- `OGADSFeatureCacheMetadata`
+- `ORCH2CollapsingSelectorPlaceholderNode`
+- `ORCH2ConductorContentData`
+- `ORCH2ConductorContentDataValue`
+- `ORCH2ConductorContentDataValue_ClientSubmitToken`
+- `ORCH2DataMutation`
+- `ORCH2DataMutation_RemoveEventRuleId`
+- `ORCH2DemoFopNicknamePopularNicknamesConductorUiModel`
+- `ORCH2DemoFopNicknamePopularNicknamesContentRequest`
+- `ORCH2SetActiveTransformIds`
+- `ORCH2TextInputNotLoggedDataValue`
+- `ORCH2TextInputUnsubmittableDataValue`
+- `ORCH2UrlRedirectInfo`
+- `POEMAnnotationSourceId`
+- `SGWPPEDynamiteExtendedData_CustomEmojiAvatar`
+- `SPMULTILANGMultilangRoutingParams`
+- `SSOFolsomRecoveryFactorDataRPCServiceImpl`
+- `SUBSCConaccSharingAction`
+

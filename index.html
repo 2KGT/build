@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kyic Repository</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: linear-gradient(135deg, #0a1428, #1e3a8a);
+            color: white;
+            min-height: 100vh;
+            overflow-x: hidden;
+            position: relative;
+        }
+
+        .container {
+            text-align: center;
+            padding: 80px 20px 60px;
+            position: relative;
+            z-index: 2;
+        }
+
+        img {
+            width: 128px;
+            height: 128px;
+            border-radius: 28px;
+            margin-bottom: 30px;
+            box-shadow: 0 20px 50px rgba(0,0,0,0.6);
+        }
+
+        h1 { font-size: 2.7em; margin-bottom: 12px; text-shadow: 0 4px 20px rgba(0,0,0,0.5); }
+        p { font-size: 1.2em; opacity: 0.92; margin-bottom: 45px; }
+
+        /* Glassmorphism mạnh + nhạy */
+        .glass-btn {
+            background: rgba(255, 255, 255, 0.09);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            border: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: 20px;
+            padding: 22px 30px;
+            font-size: 1.15em;
+            font-weight: 600;
+            text-decoration: none;
+            box-shadow: 0 12px 35px rgba(0, 0, 0, 0.35);
+            margin: 16px auto;
+            max-width: 340px;
+            display: block;
+            color: white;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .glass-btn:active {
+            transform: scale(0.94) translateY(4px);
+            box-shadow: 0 8px 20px rgba(0, 0, 0, 0.4);
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        .info {
+            margin-top: 60px;
+            font-size: 0.95em;
+            opacity: 0.85;
+            line-height: 1.6;
+        }
+
+        /* Hiệu ứng thời tiết chuyển động mượt */
+        .particle {
+            position: fixed;
+            font-size: 20px;
+            pointer-events: none;
+            z-index: 1;
+            animation: fall linear infinite;
+            user-select: none;
+        }
+
+        @keyframes fall {
+            to { transform: translateY(120vh) rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <img src="https://2kgt.github.io/repo/icons/Kyic.png" alt="Kyic Repository">
+
+        <h1>Kyic Repository</h1>
+        <p>Repo cung cấp tweak & IPA chất lượng cao cho iOS</p>
+
+        <!-- Nút Esign / Feather - Trên -->
+        <a href="#" onclick="copyEsign(); return false;" class="glass-btn">
+            📱 Add vào Esign / Feather
+        </a>
+
+        <!-- Nút Sileo - Dưới -->
+        <a href="#" onclick="copySileo(); return false;" class="glass-btn">
+            📦 Add vào Sileo / Cydia / Zebra
+        </a>
+
+        <div class="info">
+            📍 Hanoi, Vietnam<br><br>
+            Nhấn nút để tự động sao chép link
+        </div>
+    </div>
+
+    <script>
+        // Tạo hiệu ứng thời tiết mượt mà
+        function createParticle() {
+            const emojis = ['🍂', '❄️', '🌿', '✨', '☀️', '🌸'];
+            const particle = document.createElement('div');
+            particle.classList.add('particle');
+            particle.textContent = emojis[Math.floor(Math.random() * emojis.length)];
+            
+            particle.style.left = Math.random() * 100 + 'vw';
+            particle.style.top = '-30px';
+            particle.style.animationDuration = (Math.random() * 12 + 8) + 's';
+            particle.style.opacity = Math.random() * 0.7 + 0.4;
+            particle.style.fontSize = (Math.random() * 12 + 18) + 'px';
+            
+            document.body.appendChild(particle);
+
+            // Xóa sau khi rơi xong
+            setTimeout(() => particle.remove(), 20000);
+        }
+
+        // Tạo liên tục + tăng khi chạm màn hình
+        setInterval(createParticle, 280);
+
+        // Tăng hiệu ứng khi chạm màn hình
+        document.addEventListener('touchstart', () => {
+            for (let i = 0; i < 6; i++) {
+                setTimeout(createParticle, i * 80);
+            }
+        });
+
+        // Copy functions
+        function copySileo() {
+            navigator.clipboard.writeText("https://2kgt.github.io/repo/").then(() => {
+                alert("✅ Đã copy link Sileo!\n\nMở Sileo → Sources → + → Dán link");
+            });
+        }
+
+        function copyEsign() {
+            navigator.clipboard.writeText("https://2kgt.github.io/repo/apps.json").then(() => {
+                alert("✅ Đã copy link Esign/Feather!\n\nMở Esign → App Source → + → Dán link");
+            });
+        }
+    </script>
+</body>
+</html>

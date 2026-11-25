@@ -1,0 +1,8 @@
+Package: com.yourname.sampletweak
+Name: Demo
+Depends: mobilesubstrate
+Architecture: iphoneos-arm64
+Description: Một siêu phẩm mới từ lò luyện của ông giáo.
+Maintainer: PhapSuAction
+Author: PhapSuAction
+Section: Tweaks

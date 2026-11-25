@@ -1,0 +1,55 @@
+# version: 1.0.0 | 2026-11-06 | tự dựng .github/VERSIONS.md khi push, cảnh báo quên tăng version
+name: Auto update system build version.md
+
+# ┌─ Không cần sửa VERSIONS.md bằng tay ─────────────────────────────────────────
+# │ Push thay đổi trong .github/ → workflow đọc dòng "version:" của từng file,
+# │ dựng lại bảng + lịch sử từ git rồi tự commit (kèm [skip ci]).
+# │ File nào bị sửa mà số version không đổi → hiện cảnh báo trong log.
+# └─────────────────────────────────────────────────────────────────────────────
+on:
+  push:
+    paths:
+      - '.github/**'
+      - '!.github/VERSIONS.md'     # tránh tự kích hoạt lại chính nó
+  workflow_dispatch:
+
+concurrency:
+  group: versions-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  versions:
+    name: 🔢 Dựng VERSIONS.md
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - name: 📥 Checkout (đủ lịch sử để dựng bảng lịch sử)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: ⚠️ Kiểm tra file sửa mà quên tăng version
+        if: github.event_name == 'push'
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+        run: python3 .github/scripts/versions.py --check "$BEFORE_SHA" "$GITHUB_SHA"
+
+      - name: 🔢 Dựng lại VERSIONS.md
+        run: python3 .github/scripts/versions.py
+
+      - name: 💾 Commit nếu có thay đổi
+        run: |
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git add .github/VERSIONS.md
+          if git diff --cached --quiet; then
+            echo "VERSIONS.md đã mới."; exit 0
+          fi
+          git commit -m "🔢 Cập nhật VERSIONS.md [skip ci]"
+          for i in 1 2 3; do
+            git pull --rebase --autostash origin "$GITHUB_REF_NAME" && git push && exit 0
+            echo "⚠️ Push lần $i thất bại, thử lại..."; sleep 3
+          done
+          exit 1

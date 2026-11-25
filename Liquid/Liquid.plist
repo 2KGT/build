@@ -1,0 +1,15 @@
+{
+    Filter = {
+        Bundles = (
+            "com.google.ios.youtube",
+            "com.apple.springboard",
+            "com.apple.Preferences",
+            "com.apple.MobileSMS",
+            "com.apple.Music",
+            "com.apple.mobileslideshow",
+            "com.apple.camera",
+            "com.apple.AppStore",
+            "com.apple.mobilesafari"
+        );
+    };
+}

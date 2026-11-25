@@ -1,0 +1,151 @@
+# version: 2.0.0 | 2026-11-06 | không cần chọn thư mục: tự quét mọi dump có dự án dùng (một PR cho mỗi dump); chạy tay mặc định chỉ xem; tên dump sai được báo kèm danh sách hợp lệ
+name: Sửa Hook (PR)
+
+# ┌─ Tự động là chính, chạy tay chỉ là đường lùi ─────────────────────────────────
+# │ Ai gọi Hook-Fix?
+# │   • Dump-Unified      sau khi dump bản app mới (truyền đúng thư mục vừa dump)
+# │   • Build Tweak       khi phát hiện hook hỏng mà chưa có PR chờ duyệt
+# │   • Bạn (chạy tay)    chỉ khi cần xem lại / tự động bị lỗi — KHÔNG cần chọn thư mục
+# │
+# │ Chạy tay: để trống ô thư mục → tự quét mọi dump trong headers/ có dự án dùng,
+# │ chỗ nào hook hỏng mới xử lý. Mặc định chỉ XEM đề xuất (dry-run); tắt dry-run để tạo PR.
+# │
+# │ Hook-Fix chỉ đổi TÊN CLASS khi chắc chắn; mọi thứ khác chỉ liệt kê trong PR.
+# │ Cần bật một lần: Settings → Actions → General → Workflow permissions
+# │   → "Allow GitHub Actions to create and approve pull requests"
+# └─────────────────────────────────────────────────────────────────────────────
+on:
+  workflow_dispatch:
+    inputs:
+      dump:
+        description: '📁 Thư mục dump (trống = tự quét)'
+        required: false
+        default: ''
+        type: string
+      dry_run:
+        description: '🔍 Chỉ xem đề xuất (không tạo PR)'
+        type: boolean
+        default: true
+
+concurrency:
+  group: hookfix-${{ inputs.dump || 'all' }}
+  cancel-in-progress: false
+
+jobs:
+  # ════════════════════════════════════════════════════════════════
+  # JOB 1 — SCAN: chọn thư mục dump cần xử lý (nhẹ, vài giây)
+  # ════════════════════════════════════════════════════════════════
+  scan:
+    name: 🔎 Chọn thư mục dump
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.pick.outputs.matrix }}
+      count: ${{ steps.pick.outputs.count }}
+    env:
+      DUMP_INPUT: ${{ inputs.dump }}
+    steps:
+      - name: 🔒 Kiểm tra tên thư mục
+        run: |
+          case "$DUMP_INPUT" in
+            *[!A-Za-z0-9._-]*|*..*)
+              echo "::error::Tên thư mục dump không hợp lệ (chỉ chữ, số, . _ -)"; exit 1 ;;
+          esac
+
+      - name: 📥 Checkout
+        uses: actions/checkout@v4
+
+      - name: 🔎 Danh sách dump có dự án dùng
+        id: pick
+        run: |
+          LIST=$(python3 .github/scripts/hooks.py list-dumps)
+          if [ -n "$DUMP_INPUT" ]; then
+            if printf '%s\n' "$LIST" | grep -qx "$DUMP_INPUT"; then
+              LIST="$DUMP_INPUT"
+            else
+              echo "::warning::Dump '$DUMP_INPUT' không tồn tại hoặc chưa có dự án nào hook app này. Tên hợp lệ: $(printf '%s' "$LIST" | tr '\n' ' ')"
+              echo "- ⚠️ Dump \`$DUMP_INPUT\` không hợp lệ. Hợp lệ: $(printf '%s' "$LIST" | tr '\n' ' ')" >> "$GITHUB_STEP_SUMMARY"
+              LIST=""
+            fi
+          fi
+          COUNT=$(printf '%s\n' "$LIST" | grep -c . || true)
+          JSON=$(printf '%s\n' "$LIST" | python3 -c "import sys,json; print(json.dumps({'dump':[l.strip() for l in sys.stdin if l.strip()]}))")
+          echo "matrix=$JSON" >> "$GITHUB_OUTPUT"
+          echo "count=$COUNT" >> "$GITHUB_OUTPUT"
+          echo "🔎 Sẽ xử lý $COUNT dump: $(printf '%s' "$LIST" | tr '\n' ' ')"
+
+  # ════════════════════════════════════════════════════════════════
+  # JOB 2 — FIX: mỗi dump một lần chạy (đối chiếu, tự sửa tên class, PR, build thử)
+  # ════════════════════════════════════════════════════════════════
+  fix:
+    name: 🔧 Sửa hook · ${{ matrix.dump }}
+    needs: scan
+    if: needs.scan.outputs.count != '0'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write         # đẩy nhánh sửa hook
+      pull-requests: write    # mở / cập nhật PR
+      actions: write          # kích hoạt build thử tweaks.yml trên nhánh
+    strategy:
+      fail-fast: false
+      max-parallel: 2
+      matrix: ${{ fromJSON(needs.scan.outputs.matrix) }}
+    env:
+      DUMP: ${{ matrix.dump }}
+      DRY: ${{ inputs.dry_run }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - name: 📥 Checkout (đủ lịch sử để dựng fingerprint, không kèm nội dung file cũ)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          filter: blob:none
+
+      - name: 🪝 Đối chiếu hook và tự sửa tên class (hooks.py fix)
+        id: fix
+        run: |
+          EXTRA=""
+          [ "$DRY" = "true" ] && EXTRA="--dry"
+          python3 .github/scripts/hooks.py fix --dump "$DUMP" --body "$RUNNER_TEMP/HOOKFIX.md" $EXTRA
+
+      - name: 📬 Tạo nhánh và Pull Request
+        if: steps.fix.outputs.changed == 'true'
+        env:
+          FIX_VERSION: ${{ steps.fix.outputs.version }}
+          FIX_FILES: ${{ steps.fix.outputs.files }}
+        run: |
+          set -euo pipefail
+          VER="${FIX_VERSION:-run${GITHUB_RUN_NUMBER}}"
+          BRANCH="hookfix/${DUMP}-${VER}"
+          git config user.name "GitHub Action"
+          git config user.email "action@github.com"
+          git checkout -B "$BRANCH"
+          IFS=',' read -ra FILES <<< "$FIX_FILES"
+          git add -- "${FILES[@]}"
+          git commit -m "🔧 Sửa hook cho ${DUMP} ${VER} (tự động, cần duyệt)"
+          git push --force origin "$BRANCH"
+
+          TITLE="🔧 Sửa hook ${DUMP} — app ${VER}"
+          NUM=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$NUM" ]; then
+            gh pr edit "$NUM" --title "$TITLE" --body-file "$RUNNER_TEMP/HOOKFIX.md"
+            echo "🔁 Đã cập nhật PR #$NUM"
+          else
+            gh pr create --base "$GITHUB_REF_NAME" --head "$BRANCH" --title "$TITLE" --body-file "$RUNNER_TEMP/HOOKFIX.md" \
+              || { echo "::error::Không tạo được PR. Bật Settings → Actions → General → Workflow permissions → 'Allow GitHub Actions to create and approve pull requests'. Nhánh $BRANCH đã được đẩy lên, bạn có thể mở PR tay."; exit 1; }
+          fi
+          echo "BRANCH=$BRANCH" >> "$GITHUB_ENV"
+
+      - name: 🔨 Build thử các dự án vừa sửa (trên nhánh PR, không phát hành)
+        if: steps.fix.outputs.changed == 'true'
+        continue-on-error: true
+        env:
+          FIX_PROJECTS: ${{ steps.fix.outputs.projects }}
+        run: |
+          IFS=',' read -ra PROJ <<< "$FIX_PROJECTS"
+          for p in "${PROJ[@]}"; do
+            gh workflow run tweaks.yml --ref "$BRANCH" -f project="$p" -f ver_type="Giữ nguyên" \
+              -f publish=false -f send_deb=false -f clean_build=true -f run_clean_theos=false -f run_clean_logs=false \
+              || echo "::warning::Không kích hoạt được build thử cho '$p' (tên có trong danh sách dự án của tweaks.yml chưa?)"
+          done
