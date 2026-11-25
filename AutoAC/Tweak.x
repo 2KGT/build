@@ -23,7 +23,7 @@
 #import "BuildInfo.h"
 #endif
 #ifndef TWEAK_BUILD_VERSION
-#define TWEAK_BUILD_VERSION @"2.1.136"
+#define TWEAK_BUILD_VERSION @"2.1.135"
 #endif
 #ifndef TWEAK_UPSTREAM_COUNT
 #define TWEAK_UPSTREAM_COUNT 0
@@ -222,6 +222,7 @@ static NSString *const kOverlayBottomKey = @"kOverlayBottom";   // Tuỳ chỉnh
 static NSString *const kOverlayLeftKey = @"kOverlayLeft";       // Tuỳ chỉnh Overlay: mã các nút ở cột dọc bên trái trình phát, thứ tự trên → dưới
 static NSString *const kOverlayRightKey = @"kOverlayRight";     // Tuỳ chỉnh Overlay: mã các nút ở cột dọc bên phải trình phát, thứ tự trên → dưới
 static NSString *const kOverlayPosKey = @"kOverlayPos";           // Tuỳ chỉnh Overlay: vị trí tự do của nút trong hàng trên / dưới, { "dải|mã": tỉ lệ 0…1 }
+static NSString *const kOverlaySlotKey = @"kOverlaySlots";       // Tuỳ chỉnh Overlay: ô của nút, { "dải|mã": số ô } — hàng trên/dưới đếm từ ô sát bánh răng / cụm gốc (0) sang trái, cột dọc đếm từ trên xuống; cùng một số ô ở bảng và trên trình phát
 static NSString *const kLockBtnPosKey = @"kLockBtnPos";         // vị trí nút Mở khoá khi đang khoá màn hình: { "x": tỉ lệ 0…1, "y": tỉ lệ 0…1 } theo khung trình phát; người dùng kéo tự do
 static NSString *const kPlayerButtonKey = @"kPlayerButton";     // nút AutoAC ngay trên trình phát
 static NSString *const kNoAgeVerifyKey = @"kNoAgeVerify";       // bỏ màn hình xác minh tuổi
@@ -2683,7 +2684,7 @@ static NSArray<NSString *> *AutoACAllPrefKeys(void) {
              kAskDestKey, kHidePromosKey, kHidePaidPromoKey, kGlassTopKey, kGlassSheetKey, kGlassPlayerKey, kNoLaunchAnimKey, kOpenPausedKey, kStartRateKey, kDoubleTapKey,
              kShortsLikeKey, kShortsCommentKey, kShortsShareKey, kShortsSaveKey, kShortsRemixKey, kShortsSoundKey,
              kShortsPauseCardKey, kHideCommunityKey, kHideMixesKey, kHideGamesKey, kHideShopTagKey, kHideShortsShelfKey, kHideAIKey, kHideLiveKey, kSponsorKey, kSponsorCatsKey, kSponsorAlertKey,
-             kPlayerButtonKey, kCommentToolsKey, kPostImageKey, kPlayerFloatKey, kShortsLoopKey, kPlayFixKey, kNoAutoplayKey, kPlayerSpeedBtnKey, kPlayerPiPKey, kPlayerSleepBtnKey, kPlayerExternalKey, kPlayerQualityKey, kPlayerLoopKey, kPlayerPrevKey, kPlayerPlayPauseKey, kPlayerNextKey, kPlayerScreenLockKey, kLockBtnPosKey, kOverlayTopKey, kOverlayPosKey, kOverlayBottomKey, kOverlayLeftKey, kOverlayRightKey,
+             kPlayerButtonKey, kCommentToolsKey, kPostImageKey, kPlayerFloatKey, kShortsLoopKey, kPlayFixKey, kNoAutoplayKey, kPlayerSpeedBtnKey, kPlayerPiPKey, kPlayerSleepBtnKey, kPlayerExternalKey, kPlayerQualityKey, kPlayerLoopKey, kPlayerPrevKey, kPlayerPlayPauseKey, kPlayerNextKey, kPlayerScreenLockKey, kLockBtnPosKey, kOverlayTopKey, kOverlayPosKey, kOverlayBottomKey, kOverlaySlotKey, kOverlayLeftKey, kOverlayRightKey,
              kNoAgeVerifyKey, kNoPlayLimitKey, kSubsDeviceLangKey, kNoShortsPiPKey, kLocalQueueKey, kLocalQueueListKey, kPremiumLogoKey]];
 }
 
@@ -7205,7 +7206,7 @@ static void AutoACOverlayMigrateLegacy(void) {
 static const CGFloat kOverlayBoardHeight = 690.0;
 static CGFloat gOverlayK = 0.4;
 static CGFloat AutoACOverlayNat(void) { return 22.0; }          // đường kính nút tròn
-static CGFloat AutoACOverlayGap(void) { return 4.0; } // khoảng cách giữa hai nút
+static CGFloat AutoACOverlayGap(void) { return 13.0; } // khoảng cách giữa hai nút: nút 22 + 13 = bước 35 ≈ 1,6 lần cỡ nút, đúng tỉ lệ nút 30 / bước 48 trên trình phát thật
 static CGFloat AutoACOverlayStripH(void) { return AutoACOverlayNat() + 6.0; }
 static CGFloat AutoACOverlayRM(void) { return 14.0; }           // lề trái / phải của trình phát
 static const CGFloat kOverlayOffChipHeight = 72.0, kOverlayOffStripHeight = 82.0;   // dải "đang tắt": nút 38 pt + nhãn dưới nút (đồng bộ cỡ icon với bảng Tuỳ chỉnh tab)
@@ -7231,11 +7232,33 @@ static NSString *AutoACOverlayKey(NSInteger strip, NSString *ident) {
 }
 
 // ── Vị trí tự do trong hàng trên / hàng dưới ──
-// kOverlayPosKey = { "dải|mã nút": tỉ lệ 0…1 } (0 = mép trái vùng đặt nút, 1 = mép phải). Nút có tỉ lệ thì đứng đúng chỗ đó (được phép trống ở giữa);
-// hàng chưa có tỉ lệ nào thì giữ cách xếp cũ.
+// kOverlaySlotKey = { "dải|mã nút": số ô }: hàng trên / dưới đếm từ ô sát bánh răng (hoặc cụm icon gốc) sang trái, cột dọc đếm từ trên xuống.
+// Cùng một số ô cho cả bảng lẫn trình phát thật (dọc, ngang, toàn màn hình) nên vị trí và khoảng cách luôn khớp; kOverlayPosKey (tỉ lệ 0…1) chỉ còn để chuyển dữ liệu cũ.
 static NSDictionary<NSString *, NSNumber *> *AutoACOverlayPositions(void) {
-    id value = [kPrefs objectForKey:kOverlayPosKey];
-    return [value isKindOfClass:NSDictionary.class] ? value : @{};
+    id value = [kPrefs objectForKey:kOverlaySlotKey];
+    if ([value isKindOfClass:NSDictionary.class]) return value;
+    // Bản cũ lưu tỉ lệ 0…1 theo bề rộng bảng nên mỗi khung (bảng, dọc, toàn màn hình) cho ra một vị trí khác nhau: chuyển một lần sang số ô, giữ nguyên thứ tự
+    id oldValue = [kPrefs objectForKey:kOverlayPosKey];
+    if (![oldValue isKindOfClass:NSDictionary.class]) return @{};
+    NSDictionary *oldDict = oldValue;
+    NSMutableDictionary<NSString *, NSNumber *> *out = [NSMutableDictionary dictionary];
+    for (NSNumber *sNum in @[@0, @1, @3, @4]) {
+        NSString *prefix = [NSString stringWithFormat:@"%ld|", (long)sNum.integerValue];
+        BOOL row = sNum.integerValue < 2;
+        NSMutableArray<NSArray *> *items = [NSMutableArray array];
+        for (NSString *key in oldDict.allKeys) {
+            id f = oldDict[key];
+            if ([key isKindOfClass:NSString.class] && [key hasPrefix:prefix] && [f isKindOfClass:NSNumber.class]) [items addObject:@[key, f]];
+        }
+        [items sortUsingComparator:^NSComparisonResult(NSArray *a, NSArray *b) {
+            NSComparisonResult r = [a[1] compare:b[1]];
+            if (r == NSOrderedSame) r = [a[0] compare:b[0]];
+            return row ? (NSComparisonResult)(-r) : r;   // hàng ngang: nút phải nhất là ô 0
+        }];
+        for (NSUInteger i = 0; i < items.count; i++) out[items[i][0]] = @((NSInteger)i);
+    }
+    [kPrefs setObject:out forKey:kOverlaySlotKey];
+    return out;
 }
 
 static NSNumber *AutoACOverlayFrac(NSInteger strip, NSString *ident) {
@@ -7286,39 +7309,46 @@ static NSArray<NSNumber *> *AutoACOverlayResolveSlots(NSArray<NSNumber *> *desir
 
 // Tâm các nút trên lưới đều theo BƯỚC GỐC (khoảng cách tâm–tâm giữa CC và ⚙️): nút nào cũng nằm đúng một ô, hai nút kề nhau luôn cách đúng một bước.
 // anchorMax = YES: ô cuối nằm ở maxC (hàng ngang, sát bánh răng / cụm icon gốc); NO: ô đầu nằm ở minC (cột dọc, từ trên xuống).
-static NSArray<NSNumber *> *AutoACOverlayGridCenters(NSArray<NSNumber *> *fracs, CGFloat minC, CGFloat maxC, CGFloat step, CGFloat minStep, BOOL anchorMax) {
-    NSInteger n = (NSInteger)fracs.count;
+static NSArray<NSNumber *> *AutoACOverlayGridCenters(NSArray<NSNumber *> *offs, CGFloat minC, CGFloat maxC, CGFloat step, CGFloat minStep, BOOL anchorMax) {
+    NSInteger n = (NSInteger)offs.count;
     CGFloat span = MAX(maxC - minC, 0.0);
     if (n > 1 && (CGFloat)(n - 1) * step > span) step = MAX(span / (CGFloat)(n - 1), minStep);   // thiếu chỗ: chỉ thu khoảng cách vừa đủ
     NSInteger M = MAX((NSInteger)floor(span / step + 0.001) + 1, n);
     NSMutableArray<NSNumber *> *desired = [NSMutableArray arrayWithCapacity:(NSUInteger)n];
-    for (NSNumber *f in fracs) [desired addObject:@((NSInteger)llround(MIN(MAX(f.doubleValue, 0.0), 1.0) * (double)(M - 1)))];
+    for (NSNumber *o in offs) {   // o = số ô tính từ ô gốc (hàng ngang: từ phải; cột dọc: từ trên); âm = chưa có ô
+        NSInteger k = o.integerValue;
+        if (k < 0) { [desired addObject:@(-1)]; continue; }
+        NSInteger want = anchorMax ? (M - 1 - k) : k;
+        [desired addObject:@(MIN(MAX(want, 0), M - 1))];
+    }
     NSArray<NSNumber *> *slots = AutoACOverlayResolveSlots(desired, M);
     NSMutableArray<NSNumber *> *c = [NSMutableArray arrayWithCapacity:(NSUInteger)n];
     for (NSNumber *k in slots) [c addObject:@(anchorMax ? maxC - (CGFloat)(M - 1 - k.integerValue) * step : minC + (CGFloat)k.integerValue * step)];
     return c;
 }
 
-// Các nút của một hàng sắp theo vị trí tự do (trái → phải) kèm tỉ lệ; nil nếu hàng chưa có vị trí nào (dùng cách xếp cũ)
+// Các nút của một hàng / cột sắp theo ô (hàng: trái → phải, cột: trên → dưới) kèm số ô; nil nếu chưa có vị trí nào (dùng cách xếp cũ)
 static NSArray<NSDictionary *> *AutoACToolsByFrac(NSArray<NSDictionary *> *tools, NSInteger strip, NSArray<NSNumber *> **fracsOut) {
     BOOL any = NO;
     NSMutableArray<NSArray *> *pairs = [NSMutableArray array];
     for (NSUInteger i = 0; i < tools.count; i++) {
         NSNumber *f = AutoACOverlayFrac(strip, tools[i][@"id"]);
         if (f) any = YES;
-        [pairs addObject:@[tools[i], f ?: @1.0, @(i)]];
+        [pairs addObject:@[tools[i], f ?: @(-1), @(i)]];
     }
     if (!any) return nil;
+    BOOL row = strip < 2;   // hàng ngang xếp trái → phải = số ô giảm dần; cột dọc xếp trên → dưới = số ô tăng dần; nút chưa có ô xuống cuối
     [pairs sortUsingComparator:^NSComparisonResult(NSArray *a, NSArray *b) {
         double x = [a[1] doubleValue], y = [b[1] doubleValue];
-        if (x < y) return NSOrderedAscending;
-        if (x > y) return NSOrderedDescending;
-        return [a[2] compare:b[2]];
+        if (!row) { if (x < 0) x = 1e9; if (y < 0) y = 1e9; }
+        if (x == y) return [a[2] compare:b[2]];
+        BOOL before = row ? (x > y) : (x < y);
+        return before ? NSOrderedAscending : NSOrderedDescending;
     }];
     NSMutableArray<NSDictionary *> *sorted = [NSMutableArray array];
-    NSMutableArray<NSNumber *> *fracs = [NSMutableArray array];
-    for (NSArray *p in pairs) { [sorted addObject:p[0]]; [fracs addObject:@(MIN(MAX([p[1] doubleValue], 0.0), 1.0))]; }
-    if (fracsOut) *fracsOut = fracs;
+    NSMutableArray<NSNumber *> *offs = [NSMutableArray array];
+    for (NSArray *p in pairs) { [sorted addObject:p[0]]; [offs addObject:p[1]]; }
+    if (fracsOut) *fracsOut = offs;
     return sorted;
 }
 
@@ -7509,7 +7539,7 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
 @property (nonatomic, weak) UIScrollView *scroll;
 @property (nonatomic, strong) AutoACOverlayChip *dragChip;
 @property (nonatomic, assign) NSInteger holeStrip, holeIndex;   // hàng trên/dưới: holeIndex là Ô (vị trí tự do); các dải khác: thứ tự chèn
-@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fracs;   // vị trí tự do { "dải|mã": 0…1 } của hàng trên / dưới
+@property (nonatomic, strong) NSMutableDictionary<NSString *, NSNumber *> *fracs;   // vị trí tự do { "dải|mã": số ô } của hàng trên / dưới / cột dọc
 @property (nonatomic, strong) UIView *slotMarker;   // ô đích khi đang kéo nút trong hàng trên / dưới
 @property (nonatomic, assign) CGPoint grab;
 @property (nonatomic, strong) UIView *mock, *mockTrack, *mockFill;   // khung trình phát giả chứa hàng trên và hàng dưới
@@ -7798,12 +7828,13 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
             NSMutableArray<NSString *> *sorted = [NSMutableArray array];
             for (NSArray *p in pairs) {
                 [sorted addObject:p[0]];
-                pos[AutoACOverlayKey(s, p[0])] = @((double)[p[1] integerValue] / (double)MAX(M - 1, 1));
+                NSInteger sl = [p[1] integerValue];
+                pos[AutoACOverlayKey(s, p[0])] = @(s < 2 ? MAX(M - 1 - sl, 0) : sl);   // hàng ngang: số ô tính từ phải (sát bánh răng / cụm gốc = 0), cột dọc: từ trên
             }
             [idents setArray:sorted];
         }
         self.fracs = pos;
-        [kPrefs setObject:[pos copy] forKey:kOverlayPosKey];
+        [kPrefs setObject:[pos copy] forKey:kOverlaySlotKey];
     }
     NSArray<NSString *> *left = self.lists.count > 3 ? [self.lists[3] copy] : @[];
     NSArray<NSString *> *right = self.lists.count > 4 ? [self.lists[4] copy] : @[];
@@ -7817,6 +7848,7 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
     [kPrefs removeObjectForKey:kOverlayLeftKey];
     [kPrefs removeObjectForKey:kOverlayRightKey];
     [kPrefs removeObjectForKey:kOverlayPosKey];
+    [kPrefs removeObjectForKey:kOverlaySlotKey];
     [self reloadLists];
     [self selectDefault];
     [self rebuildAnimated:YES];
@@ -7961,7 +7993,7 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
     NSMutableArray<NSNumber *> *desired = [NSMutableArray arrayWithCapacity:idents.count];
     for (NSString *ident in idents) {
         NSNumber *f = self.fracs[AutoACOverlayKey(s, ident)];
-        [desired addObject:f ? @((NSInteger)llround(MIN(MAX(f.doubleValue, 0.0), 1.0) * (double)(M - 1))) : @(-1)];
+        [desired addObject:f ? @(MIN(MAX(s < 2 ? (M - 1 - f.integerValue) : f.integerValue, 0), M - 1)) : @(-1)];
     }
     return AutoACOverlayResolveSlots(desired, M);
 }
@@ -8390,7 +8422,8 @@ static void AutoACOverlayMetrics(NSInteger strip, NSInteger slots, CGFloat board
         for (NSInteger rs = 0; rs <= 4; rs++) [self.fracs removeObjectForKey:AutoACOverlayKey(rs, ident)];
         if (to != 2) {   // hàng trên / dưới: đứng đúng ô đã thả, thứ tự danh sách sẽ được sắp lại theo ô khi lưu
             NSInteger M = [self freeSlotCountForStrip:to width:CGRectGetWidth(self.bounds)];
-            self.fracs[AutoACOverlayKey(to, ident)] = @((double)MIN(MAX(index, 0), M - 1) / (double)MAX(M - 1, 1));
+            NSInteger sl = MIN(MAX(index, 0), M - 1);
+            self.fracs[AutoACOverlayKey(to, ident)] = @(to < 2 ? (M - 1 - sl) : sl);
             [dest addObject:ident];
         } else {
             [dest insertObject:ident atIndex:MIN((NSUInteger)MAX(index, 0), dest.count)];
@@ -13910,6 +13943,8 @@ static void AutoACEnsurePlayerFloat(UIView *overlay) {
 }
 
 // Cột nút dọc bên trái hoặc phải trình phát (tương tự AutoACEnsurePlayerFloat nhưng xếp dọc)
+static UIView *AutoACFullscreenControl(UIView *bar);
+static BOOL AutoACControlShown(UIView *v);
 static void AutoACEnsureVerticalColumn(UIView *overlay, BOOL rightColumn) {
     const void *toolsKey = rightColumn ? kAutoACRightColKey : kAutoACLeftColKey;
     const void *sigKey = rightColumn ? kAutoACRightColSigKey : kAutoACLeftColSigKey;
@@ -13924,67 +13959,90 @@ static void AutoACEnsureVerticalColumn(UIView *overlay, BOOL rightColumn) {
         buttons = [NSMutableDictionary dictionary];
         objc_setAssociatedObject(overlay, toolsKey, buttons, OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     }
-    // Vùng hiển thị: hàng AutoAC nằm ngay dưới thanh gốc (gear_maxY+2); cột bắt đầu sau hàng đó
+    const CGFloat iconSize = kPlayerToolSize;
+    const CGFloat kGapMin = 6.0;   // khoảng cách tối thiểu giữa hai nút kề nhau
+    // Vùng đặt cột: bắt đầu dưới hàng AutoAC trên cùng (và thanh gốc), kết thúc trên hàng dưới (thời gian, toàn màn hình, nút Overlay hàng dưới)
     UIView *gear = objc_getAssociatedObject(overlay, &kAutoACGearKey);
     CGRect gRect = CGRectZero;
     CGFloat safeR0 = MAX(overlay.safeAreaInsets.right, 10.0);
-    CGFloat gearMidX = w - safeR0 - 22.0 - kPlayerToolSize / 2.0;   // fallback khi không tìm thấy bánh răng
-    CGFloat topY = 44.0 + kPlayerToolSize + 8.0;
+    CGFloat gearMidX = w - safeR0 - 22.0 - iconSize / 2.0;   // fallback khi không tìm thấy bánh răng
+    CGFloat topY = 44.0 + iconSize + 8.0;
     if (gear) {
         gRect = [overlay convertRect:gear.bounds fromView:gear];
         if (CGRectGetMaxY(gRect) > 10) {
-            topY = CGRectGetMaxY(gRect) + 4.0;   // ngay dưới thanh gốc, cột dọc bắt đầu sớm hơn để chứa đủ icon
+            topY = CGRectGetMaxY(gRect) + 4.0;   // ngay dưới thanh gốc
             gearMidX = CGRectGetMidX(gRect);
         }
     }
-    CGFloat botY = H - 24.0;   // lề dưới tối thiểu → tối đa không gian cho cột
-    if (botY - topY < kPlayerToolSize) { for (UIButton *b in buttons.allValues) b.hidden = YES; return; }
-    // Auto-size: điều chỉnh cỡ icon và gap để hiển thị đủ tất cả nút trong vùng khả dụng (không bỏ sót nút nào)
-    NSInteger count = (NSInteger)tools.count;
-    const CGFloat iconSize = kPlayerToolSize;
-    CGFloat gap = 6.0;
-    if (count > 1) {
-        CGFloat available = botY - topY;
-        CGFloat needed = count * iconSize + (count - 1) * gap;
-        if (needed > available) gap = MAX(2.0, (available - count * iconSize) / (CGFloat)(count - 1));   // chỉ thu khoảng cách, không bao giờ thu nhỏ nút (mọi nút cùng một cỡ); thiếu chỗ thì bớt nút (maxCount)
+    NSDictionary<NSString *, UIButton *> *rowButtons = objc_getAssociatedObject(overlay, &kAutoACToolsKey);
+    for (UIButton *rb in rowButtons.allValues) {   // hàng Overlay trên cùng cột x với bánh răng: cột phải KHÔNG được đè lên nút cuối của hàng đó
+        if (rb.hidden || rb.superview != overlay) continue;
+        topY = MAX(topY, CGRectGetMaxY(rb.frame) + 4.0);
     }
-    NSInteger maxCount = MAX(1, (NSInteger)floor((botY - topY + gap) / (iconSize + gap)));
-    NSInteger colCap = 4;   // cho phép 4 icon dù portrait inline hay landscape
-    count = MIN(count, MIN(maxCount, colCap));
+    CGFloat botY = H - 24.0;
+    for (UIView *bar in gBottomBars.allObjects) {   // hàng dưới: nút toàn màn hình cùng hàng với thời gian và nút Overlay dưới
+        if (!bar.window || bar.window != overlay.window) continue;
+        UIView *fs = AutoACFullscreenControl(bar);
+        if (!AutoACControlShown(fs)) continue;
+        CGRect fr = [overlay convertRect:fs.bounds fromView:fs];
+        if (!CGRectIntersectsRect(fr, overlay.bounds)) continue;
+        botY = MIN(botY, CGRectGetMinY(fr) - 4.0);
+    }
+    if (botY - topY < iconSize) { for (UIButton *b in buttons.allValues) b.hidden = YES; return; }
+    CGFloat avail = botY - topY;
+    NSInteger colCap = 4;   // tối đa 4 nút mỗi cột dọc (bảng Tuỳ chỉnh Overlay cũng giới hạn như vậy)
+    // Số nút xếp vừa MỘT cột trong vùng trống; nút dư xếp thành cột thứ hai nằm vào phía trong (không bao giờ đè lên hàng trên / hàng dưới)
+    NSInteger perCol = MAX(1, MIN(colCap, (NSInteger)floor((avail + kGapMin) / (iconSize + kGapMin))));
     NSInteger colStrip = rightColumn ? 4 : 3;
-    NSArray<NSNumber *> *freeFracs = nil;
-    NSArray<NSDictionary *> *freeTools = AutoACToolsByFrac(tools, colStrip, &freeFracs);   // nil = chưa chỉnh vị trí tự do: cách xếp cũ
+    NSArray<NSNumber *> *freeOffs = nil;
+    NSArray<NSDictionary *> *freeTools = AutoACToolsByFrac(tools, colStrip, &freeOffs);   // nil = chưa chỉnh vị trí tự do: cách xếp cũ
+    NSArray<NSDictionary *> *ordered = freeTools ?: tools;
+    NSInteger total = MIN((NSInteger)ordered.count, colCap);
+    BOOL oneColumn = total <= perCol;
     CGFloat nstep = gAutoACToolStep > 0 ? gAutoACToolStep : AutoACMeasureTopStep(overlay.window);
     if (nstep <= 0) nstep = 46.0;
     nstep = MAX(nstep, iconSize + 6.0);   // cùng khoảng cách gốc giữa CC và ⚙️
-    if (freeTools) count = MIN((NSInteger)freeTools.count, colCap);
-    // Chữ ký: nếu không thay đổi thì bỏ qua
-    NSMutableString *sig = [NSMutableString stringWithFormat:@"%.0f|%.0f|%ld|%.0f|%.0f|%.0f|", w, H, (long)count, iconSize, gap, gearMidX];
-    for (NSDictionary *tool in tools) [sig appendString:tool[@"title"]];
-    if (freeTools) { [sig appendFormat:@"N%.0f|", nstep]; for (NSNumber *f in freeFracs) [sig appendFormat:@"F%.3f|", f.doubleValue]; }
-    NSString *prevSig = objc_getAssociatedObject(overlay, sigKey);
-    BOOL allPresent = YES;
-    for (NSDictionary *tool in tools) if (!buttons[tool[@"title"]] || buttons[tool[@"title"]].superview != overlay || buttons[tool[@"title"]].hidden) { allPresent = NO; break; }
-    if (allPresent && [sig isEqualToString:prevSig ?: @""]) return;
-    objc_setAssociatedObject(overlay, sigKey, [sig copy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     // Vị trí X: cột phải thẳng hàng với tâm X của bánh răng ⚙️ (tiêu chuẩn); cột trái cách safe area 14pt
     CGFloat safeL = MAX(overlay.safeAreaInsets.left, 10.0);
-    CGFloat colX = rightColumn ? (gearMidX - kPlayerToolSize / 2.0) : (safeL + 14.0);
-    // Căn giữa dọc trong vùng khả dụng
-    CGFloat totalH = (CGFloat)count * iconSize + (CGFloat)MAX(count - 1, 0) * gap;
-    CGFloat startY = topY + (botY - topY - totalH) / 2;
+    CGFloat colX = rightColumn ? (gearMidX - iconSize / 2.0) : (safeL + 14.0);
+    // Chữ ký: nếu không thay đổi thì bỏ qua
+    NSMutableString *sig = [NSMutableString stringWithFormat:@"%.0f|%.0f|%ld|%ld|%.0f|%.0f|%.0f|%.0f|", w, H, (long)total, (long)perCol, topY, botY, colX, nstep];
+    for (NSDictionary *tool in ordered) [sig appendString:tool[@"title"]];
+    if (freeOffs && oneColumn) for (NSNumber *f in freeOffs) [sig appendFormat:@"F%ld|", (long)f.integerValue];
+    NSString *prevSig = objc_getAssociatedObject(overlay, sigKey);
+    BOOL allPresent = YES;
+    for (NSInteger i = 0; i < total; i++) {
+        NSString *title = ordered[(NSUInteger)i][@"title"];
+        if (!buttons[title] || buttons[title].superview != overlay || buttons[title].hidden) { allPresent = NO; break; }
+    }
+    if (allPresent && [sig isEqualToString:prevSig ?: @""]) return;
+    objc_setAssociatedObject(overlay, sigKey, [sig copy], OBJC_ASSOCIATION_RETAIN_NONATOMIC);
     NSMutableSet<NSString *> *wanted = [NSMutableSet set];
-    NSArray<NSDictionary *> *drawTools = freeTools ?: tools;
-    NSArray<NSNumber *> *freeCenters = freeTools ? AutoACOverlayGridCenters([freeFracs subarrayWithRange:NSMakeRange(0, (NSUInteger)count)], topY + iconSize / 2.0, botY - iconSize / 2.0, nstep, iconSize + 2.0, NO) : nil;
-    for (NSInteger i = 0; i < count; i++) {
-        NSDictionary *tool = drawTools[(NSUInteger)i];
+    NSArray<NSNumber *> *freeCenters = nil;
+    CGFloat startY = topY, gap = kGapMin;
+    if (oneColumn) {
+        if (freeOffs) freeCenters = AutoACOverlayGridCenters([freeOffs subarrayWithRange:NSMakeRange(0, (NSUInteger)total)], topY + iconSize / 2.0, botY - iconSize / 2.0, nstep, iconSize + 2.0, NO);
+        else {   // xếp đều, căn giữa vùng trống
+            CGFloat totalH = (CGFloat)total * iconSize + (CGFloat)MAX(total - 1, 0) * gap;
+            startY = topY + (avail - totalH) / 2;
+        }
+    }
+    for (NSInteger i = 0; i < total; i++) {
+        NSDictionary *tool = ordered[(NSUInteger)i];
         NSString *title = tool[@"title"];
         [wanted addObject:title];
         UIButton *b = buttons[title];
         if (!b) { b = AutoACMakeToolButton(tool); buttons[title] = b; }
         if (b.superview != overlay) [overlay addSubview:b];
-        CGFloat cy = freeCenters ? freeCenters[(NSUInteger)i].doubleValue - iconSize / 2.0 : startY + (CGFloat)i * (iconSize + gap);
-        CGRect frame = CGRectMake(round(colX), round(cy), iconSize, iconSize);
+        CGFloat bx = colX, by;
+        if (oneColumn) {
+            by = freeCenters ? freeCenters[(NSUInteger)i].doubleValue - iconSize / 2.0 : startY + (CGFloat)i * (iconSize + gap);
+        } else {   // quá nhiều nút cho một cột: từng cột đầy rồi sang cột kế bên phía trong
+            NSInteger ci = i / perCol, ri = i % perCol;
+            bx = rightColumn ? colX - (CGFloat)ci * (iconSize + kGapMin) : colX + (CGFloat)ci * (iconSize + kGapMin);
+            by = topY + (CGFloat)ri * (iconSize + kGapMin);
+        }
+        CGRect frame = CGRectMake(round(bx), round(by), iconSize, iconSize);
         if (!CGRectEqualToRect(b.frame, frame)) b.frame = frame;
         AutoACApplyToolGlass(b);
         b.hidden = NO;
