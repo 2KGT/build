@@ -1,6 +1,6 @@
 Package: com.kyic.autoac
 Name: AutoAC
-Version: 2.1.136
+Version: 2.1.137
 Architecture: iphoneos-arm64
 Depends: mobilesubstrate
 Description: AutoAC tweak (long press + logo YouTube)
