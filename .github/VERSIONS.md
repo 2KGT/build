@@ -26,18 +26,25 @@
 | `scripts/tgbot.py` | **1.1.0** | 2026-11-13 | gửi cả .deb và .dylib; nội dung tin lấy từ RELEASE_NOTES.md; hiện liên kết Release / trạng thái đẩy lên repo Sileo |
 | `scripts/upstream.py` | _chưa đánh số_ | — | — |
 | `scripts/versions.py` | **1.0.0** | 2026-11-06 | tự dựng VERSIONS.md từ dòng version trong file + git log; cảnh báo quên tăng số |
-| `tweaks.catalog.json` | **1.1.0** | 2026-11-06 | bỏ YTLite của tác giả; chia tweak bên thứ ba thành gói video/ui/khac |
-| `workflows/Dump-Unified.yml` | **2.2.2** | 2026-11-06 | không tự gọi Hook-Fix khi dump MỘT PHẦN (có điền 'chỉ lấy class') vì dễ tạo 'class mất' giả; còn lại giữ nguyên |
-| `workflows/Hook-Fix.yml` | **2.0.0** | 2026-11-06 | không cần chọn thư mục: tự quét mọi dump có dự án dùng (một PR cho mỗi dump); chạy tay mặc định chỉ xem; tên dump sai được báo kèm danh sách hợp lệ |
-| `workflows/Package.yml` | **3.1.0** | 2026-11-06 | ô Bộ tweak liệt kê thẳng dự án của bạn (tự thành repo:Tên), bỏ YTLite của tác giả; gói preset:video/ui/khac; tweak bên thứ ba lỗi thì bỏ qua (strict=1 để dừng) \| cần package_engine.py >= 2.2.0 |
-| `workflows/Versions.yml` | **1.0.0** | 2026-11-06 | tự dựng .github/VERSIONS.md khi push, cảnh báo quên tăng version |
-| `workflows/tweaks.yml` | **3.1.0** | 2026-11-15 | phát hành thành MỘT hàng đợi: Sileo .deb → Sileo .dylib → Release (mỗi bước chờ kho xử lý xong); publish.py chỉ chuyển hàng tới hộp nhận repo Sileo, việc phân loại/đặt kệ do repo Sileo làm |
+| `tweaks.catalog.json` | **1.1.0** | 2026-11-06 | chia tweak bên thứ ba thành gói video/ui/khac |
 
 File _chưa đánh số_ sẽ được ghi số ở lần sửa tiếp theo của chính file đó.
 
 ## Lịch sử đổi phiên bản
 
-_Chưa có lịch sử git cho các file đã đánh số (sẽ xuất hiện sau commit đầu tiên chứa dòng `version:`)._
+| Ngày | File | Phiên bản | Ghi chú | Commit |
+|------|------|-----------|---------|--------|
+| 2026-11-25 | `tweaks.catalog.json` | 1.1.0 (lần đầu) | bỏ YTLite của tác giả; chia tweak bên thứ ba thành gói video/ui/khac | `5adceb3` |
+| 2026-11-25 | `scripts/versions.py` | 1.0.0 (lần đầu) | tự dựng VERSIONS.md từ dòng version trong file + git log; cảnh báo quên tăng số | `5adceb3` |
+| 2026-11-25 | `scripts/tgbot.py` | 1.1.0 (lần đầu) | gửi cả .deb và .dylib; nội dung tin lấy từ RELEASE_NOTES.md; hiện liên kết Release / trạng thái đẩy lên repo Sileo | `5adceb3` |
+| 2026-11-25 | `scripts/publish.py` | 2.0.0 (lần đầu) | CHỈ CHUYỂN HÀNG theo hàng đợi deb → dylib → Release tới đúng địa chỉ; phân loại/đặt kệ do repo Sileo (intake.py) làm | `5adceb3` |
+| 2026-11-25 | `scripts/plan.py` | 1.1.1 (lần đầu) | khôi phục: chỉ đổi <Dự án>/control mới kích hoạt build khi push (sửa file Logos/xoá file KHÔNG tự build) | `5adceb3` |
+| 2026-11-25 | `scripts/package_engine.py` | 2.2.0 (lần đầu) | ô Bộ tweak nhận tên dự án trong repo (tự thành repo:Tên); tweak bên thứ ba lỗi build thì bỏ qua và báo (strict=1 để dừng); cảnh báo dự án chưa có trong danh sách chọn | `5adceb3` |
+| 2026-11-25 | `scripts/modules/yt_handler.py` | 1.1.0 (lần đầu) | thêm HEADER_DIRS (dump của người dùng) để hooks.py nối dự án YouTube với headers/YouTubeHeader | `5adceb3` |
+| 2026-11-25 | `scripts/hooks.py` | 1.2.0 (lần đầu) | list-dumps/latest-dump (tự chọn thư mục), dựng fingerprint từ lịch sử git, báo tên dump sai kèm danh sách hợp lệ, check-all xuất broken/broken_dumps | `5adceb3` |
+| 2026-11-25 | `scripts/engine_core.py` | 2.1.0 (lần đầu) | build nhiều hệ sinh thái (Rootless/Rootful/Dylib), tự soạn mô tả vào control tạm thời, thu .dylib; không đổi cách gọi cũ | `5adceb3` |
+| 2026-11-25 | `scripts/deb_desc.py` | 1.0.0 (lần đầu) | soạn mô tả + ghi chú phiên bản tự động (sửa lỗi / tính năng / chú ý / hỗ trợ tốt nhất) cho .deb, Release, Sileo, Telegram | `5adceb3` |
+| 2026-11-25 | `scripts/build_engine.py` | 2.1.0 (lần đầu) | build nhiều hệ sinh thái (INPUT_ECO), tự soạn mô tả/ghi chú (INPUT_NOTES → control tạm thời + RELEASE_NOTES.md), xuất has_dylib/ecosystems/release_title | `5adceb3` |
 
 ## Quy ước
 
