@@ -23,7 +23,7 @@
 #import "BuildInfo.h"
 #endif
 #ifndef TWEAK_BUILD_VERSION
-#define TWEAK_BUILD_VERSION @"2.1.135"
+#define TWEAK_BUILD_VERSION @"2.1.136"
 #endif
 #ifndef TWEAK_UPSTREAM_COUNT
 #define TWEAK_UPSTREAM_COUNT 0
@@ -35,7 +35,7 @@
 #ifndef TWEAK_UPSTREAM_YOUTUBEX_GATED
 #define TWEAK_UPSTREAM_YOUTUBEX_GATED 0
 #endif
-// =1 khi bản build có NoYTPremium và đã bọc được công tắc: công tắc "No premium" điều khiển luôn cả phần của NoYTPremium
+// =1 khi bản build có NoYTPremium và đã bọc được công tắc: công tắc "NoYTPremium" điều khiển luôn cả phần của NoYTPremium
 #ifndef TWEAK_UPSTREAM_NOYTPREMIUM_GATED
 #define TWEAK_UPSTREAM_NOYTPREMIUM_GATED 0
 #endif
@@ -2280,6 +2280,7 @@ static NSArray<NSDictionary *> *gSponsorSegments = nil;
 static NSMutableSet<NSString *> *gSponsorSkipped = nil;
 static CFTimeInterval gSponsorLastSeek = 0;    // thời điểm seek gần nhất → cooldown 1,5 s tránh lặp
 static double gSponsorLastSeekEnd = -1;         // vị trí seek gần nhất → không skip lại cùng điểm
+static BOOL gSponsorRetried = NO;               // đã thử tải lại một lần cho video hiện tại
 
 // 4 ký tự hex đầu của SHA-256(mã video): SponsorBlock trả về mọi video có cùng tiền tố, app tự chọn đúng video → máy chủ không biết bạn xem video nào
 static NSString *AutoACSponsorHashPrefix(NSString *videoID) {
@@ -2298,6 +2299,7 @@ static void AutoACSponsorLoad(NSString *videoID) {
     gSponsorSkipped = [NSMutableSet set];
     gSponsorLastSeek = 0;
     gSponsorLastSeekEnd = -1;
+    gSponsorRetried = NO;
     NSArray<NSString *> *cats = AutoACSponsorEnabled();
     if (cats.count == 0) return;
     NSData *catData = [NSJSONSerialization dataWithJSONObject:cats options:0 error:nil];
@@ -2312,7 +2314,21 @@ static void AutoACSponsorLoad(NSString *videoID) {
     NSString *requested = [videoID copy];
     [[AutoACPrivateSession() dataTaskWithRequest:request
         completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
-        if (error || ((NSHTTPURLResponse *)response).statusCode != 200 || data.length == 0 || data.length > 1048576) return;
+        NSInteger status = [response isKindOfClass:NSHTTPURLResponse.class] ? ((NSHTTPURLResponse *)response).statusCode : 0;
+        if (error || status >= 500 || status == 429 || status == 0) {
+            // Lỗi mạng / máy chủ bận: thử lại một lần sau 4 giây (nếu vẫn đang xem video này)
+            dispatch_async(dispatch_get_main_queue(), ^{
+                if (![requested isEqualToString:gSponsorVideo] || gSponsorRetried) return;
+                gSponsorRetried = YES;
+                dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(4 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+                    if (![requested isEqualToString:gSponsorVideo]) return;
+                    gSponsorVideo = nil;
+                    AutoACSponsorLoad(requested);
+                });
+            });
+            return;
+        }
+        if (status != 200 || data.length == 0 || data.length > 1048576) return;   // 404: video chưa có đoạn nào
         id json = [NSJSONSerialization JSONObjectWithData:data options:0 error:nil];
         if (![json isKindOfClass:NSArray.class]) return;
         // Trả lời theo tiền tố: [{videoID, segments:[…]}, …] gồm cả video khác cùng tiền tố → chỉ lấy đúng video đang xem
@@ -2394,8 +2410,8 @@ static void AutoACSponsorEvaluate(id player, double time) {
         double start = [seg[@"start"] doubleValue], end = [seg[@"end"] doubleValue];
         if (time < start || time >= end - 0.4) continue;
         if ([gSponsorSkipped containsObject:seg[@"id"]]) continue;
+        if (!AutoACSeekSeconds(player, end)) return;   // tua không được thì không đánh dấu đã bỏ qua, nhịp sau thử lại
         [gSponsorSkipped addObject:seg[@"id"]];
-        if (!AutoACSeekSeconds(player, end)) return;
         if (![kPrefs boolForKey:kSponsorAlertKey]) return;
         NSString *name = seg[@"category"];
         for (NSDictionary *d in AutoACSponsorCategories()) if ([d[@"id"] isEqualToString:name]) name = d[@"name"];
@@ -2546,26 +2562,22 @@ static void AutoACShowSponsorCategories(void) {
     rows.axis = UILayoutConstraintAxisVertical;
     rows.translatesAutoresizingMaskIntoConstraints = NO;
     NSArray *enabled = AutoACSponsorEnabled();
-    for (NSDictionary *d in AutoACSponsorCategories()) {
+    // Một dòng công tắc: tên, ghi chú, trạng thái, hành động khi đổi
+    void (^addRow)(NSString *, NSString *, BOOL, void (^)(BOOL)) = ^(NSString *nameText, NSString *noteText, BOOL on, void (^changed)(BOOL)) {
         UIView *row = [[UIView alloc] init];
         row.translatesAutoresizingMaskIntoConstraints = NO;
-        UILabel *name = AutoACLabel(d[@"name"], 15.5, UIFontWeightMedium, UIColor.labelColor);
+        UILabel *name = AutoACLabel(nameText, 15.5, UIFontWeightMedium, UIColor.labelColor);
         name.translatesAutoresizingMaskIntoConstraints = NO;
-        UILabel *note = AutoACLabel(d[@"desc"] ?: @"", 11.5, UIFontWeightRegular, UIColor.secondaryLabelColor);
+        UILabel *note = AutoACLabel(noteText ?: @"", 11.5, UIFontWeightRegular, UIColor.secondaryLabelColor);
         note.translatesAutoresizingMaskIntoConstraints = NO;
         [row addSubview:note];
         UISwitch *toggle = [[UISwitch alloc] init];
         toggle.translatesAutoresizingMaskIntoConstraints = NO;
         toggle.transform = CGAffineTransformMakeScale(kAutoACSwitchScale, kAutoACSwitchScale);
-        toggle.on = [enabled containsObject:d[@"id"]];
-        NSString *cat = d[@"id"];
-        [toggle addAction:[UIAction actionWithHandler:^(__kindof UIAction *a) {
-            NSMutableArray *list = [AutoACSponsorEnabled() mutableCopy];
-            if (toggle.on) { if (![list containsObject:cat]) [list addObject:cat]; } else [list removeObject:cat];
-            [kPrefs setObject:list forKey:kSponsorCatsKey];
-            gSponsorVideo = nil;   // tải lại đoạn cho video hiện tại
-            AutoACSponsorLoad(AutoACCurrentVideoID());
-        }] forControlEvents:UIControlEventValueChanged];
+        toggle.on = on;
+        __weak UISwitch *weakToggle = toggle;
+        [toggle addAction:[UIAction actionWithHandler:^(__kindof UIAction *a) { changed(weakToggle.on); }]
+         forControlEvents:UIControlEventValueChanged];
         UIView *line = [[UIView alloc] init];
         line.translatesAutoresizingMaskIntoConstraints = NO;
         line.backgroundColor = [UIColor.separatorColor colorWithAlphaComponent:0.5];
@@ -2578,13 +2590,33 @@ static void AutoACShowSponsorCategories(void) {
             [note.leadingAnchor constraintEqualToAnchor:name.leadingAnchor],
             [note.topAnchor constraintEqualToAnchor:name.bottomAnchor constant:1],
             [note.trailingAnchor constraintLessThanOrEqualToAnchor:toggle.leadingAnchor constant:-10],
-            [toggle.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-14],
+            [toggle.trailingAnchor constraintEqualToAnchor:row.trailingAnchor constant:-kAutoACEdgeInset - 2],
             [toggle.centerYAnchor constraintEqualToAnchor:row.centerYAnchor],
             [line.leadingAnchor constraintEqualToAnchor:row.leadingAnchor constant:16],
             [line.trailingAnchor constraintEqualToAnchor:row.trailingAnchor],
             [line.bottomAnchor constraintEqualToAnchor:row.bottomAnchor],
             [line.heightAnchor constraintEqualToConstant:0.5]]];
         [rows addArrangedSubview:row];
+    };
+    // Hai công tắc chung ở đầu bảng
+    addRow(AutoACT(@"Bật tự bỏ qua"), AutoACT(@"Dữ liệu từ sponsor.ajay.app"), [kPrefs boolForKey:kSponsorKey], ^(BOOL on) {
+        [kPrefs setBool:on forKey:kSponsorKey];
+        gSponsorVideo = nil;
+        if (on) AutoACSponsorLoad(AutoACCurrentVideoID());   // bật giữa chừng: áp dụng ngay cho video đang xem
+        else { gSponsorSegments = nil; gSponsorSkipped = nil; }
+    });
+    addRow(AutoACT(@"Báo khi bỏ qua"), AutoACT(@"Hiện thông báo nhỏ"), [kPrefs boolForKey:kSponsorAlertKey], ^(BOOL on) {
+        [kPrefs setBool:on forKey:kSponsorAlertKey];
+    });
+    for (NSDictionary *d in AutoACSponsorCategories()) {
+        NSString *cat = d[@"id"];
+        addRow(d[@"name"], d[@"desc"], [enabled containsObject:cat], ^(BOOL on) {
+            NSMutableArray *list = [AutoACSponsorEnabled() mutableCopy];
+            if (on) { if (![list containsObject:cat]) [list addObject:cat]; } else [list removeObject:cat];
+            [kPrefs setObject:list forKey:kSponsorCatsKey];
+            gSponsorVideo = nil;   // tải lại đoạn cho video hiện tại
+            AutoACSponsorLoad(AutoACCurrentVideoID());
+        });
     }
     UIScrollView *scroll = [[UIScrollView alloc] init];
     scroll.translatesAutoresizingMaskIntoConstraints = NO;
@@ -2602,7 +2634,7 @@ static void AutoACShowSponsorCategories(void) {
         [rows.widthAnchor constraintEqualToAnchor:scroll.frameLayoutGuide.widthAnchor],
     ]];
     CGFloat top = MIN(MAX(gLastMenuAnchor.y + 24, window.safeAreaInsets.top + 8), CGRectGetHeight(window.bounds) * 0.35);
-    AutoACShowPanel(@"Sponsor block", AutoACT(@"Chọn loại đoạn tự bỏ qua"), scroll, top, AutoACT(@"Mặc định"), ^{
+    AutoACShowPanel(@"Sponsor block", AutoACT(@"Tự bỏ qua, báo, loại đoạn"), scroll, top, AutoACT(@"Mặc định"), ^{
         [kPrefs removeObjectForKey:kSponsorCatsKey];
         gSponsorVideo = nil;
         AutoACSponsorLoad(AutoACCurrentVideoID());
@@ -9555,16 +9587,10 @@ static NSArray<AutoACItem *> *AutoACBuildItems(void) {
         AutoACT(@"Chạm nút Tải xuống gốc của YouTube (hàng nút dưới video) hoặc mục Tải xuống trong menu … ở góc dưới bên phải video sẽ mở bảng tải của AutoAC thay cho bảng của YouTube. Có thể bật cùng Nút icon tải khi cần."), ^{ AutoACRelayoutPlayerButton(); })];
 
     // ── SponsorBlock ──
-    [items addObject:ACAction(@"Sponsor block", AutoACT(@"Loại đoạn tự bỏ qua"), @"checklist", UIColor.systemGreenColor,
-        AutoACT(@"Chọn các loại đoạn SponsorBlock sẽ tự bỏ qua: tài trợ, tự quảng bá, nhắc tương tác, mở đầu, kết, xem trước, phần không phải nhạc, đoạn thừa."),
+    [items addObject:ACAction(@"Sponsor block", AutoACT(@"Tự bỏ qua, báo, loại đoạn"), @"forward.end.alt.fill", UIColor.systemGreenColor,
+        AutoACT(@"Cài đặt SponsorBlock (dữ liệu từ sponsor.ajay.app): bật tự bỏ qua, báo khi bỏ qua và chọn các loại đoạn sẽ tự bỏ qua: tài trợ, tự quảng bá, nhắc tương tác, mở đầu, kết, xem trước, phần không phải nhạc, đoạn thừa."),
         ^{ AutoACDismissMenu(); AutoACShowSponsorCategories(); })];
     items.lastObject.inlineRow = YES;
-    [items addObject:ACSwitch(AutoACT(@"Quảng cáo"), AutoACT(@"Bật tự bỏ qua"), AutoACT(@"Dữ liệu từ sponsor.ajay.app"), @"forward.end.alt.fill",
-        UIColor.systemGreenColor, kSponsorKey,
-        AutoACT(@"Tự tua qua các đoạn tài trợ, tự quảng bá, nhắc like và đăng ký do cộng đồng SponsorBlock đánh dấu. Chọn các loại đoạn ở mục Sponsor block. Áp dụng từ video tiếp theo."), nil)];
-    [items addObject:ACSwitch(AutoACT(@"Quảng cáo"), AutoACT(@"Báo khi bỏ qua"), AutoACT(@"Hiện thông báo nhỏ"), @"bell.badge.fill",
-        UIColor.systemOrangeColor, kSponsorAlertKey,
-        AutoACT(@"Hiện thông báo ngắn cho biết loại đoạn vừa được bỏ qua."), nil)];
 
     NSArray *shortsRows = @[
         @[AutoACT(@"Ẩn nút Thích"), AutoACT(@"Cột nút bên phải"), @"hand.thumbsup.fill", kShortsLikeKey, AutoACT(@"Ẩn nút Thích trong Shorts.")],
@@ -9589,9 +9615,9 @@ static NSArray<AutoACItem *> *AutoACBuildItems(void) {
         UIColor.systemPinkColor, kHideMixesKey,
         AutoACT(@"Ẩn thẻ gợi ý (nudge) và Mix trong bảng tin. Cần mở lại app."), restart)];
 
-    [items addObject:ACSwitch(AutoACT(@"Quảng cáo"), @"No premium", AutoACT(@"Chặn popup và thẻ mời Premium"), @"xmark.shield.fill",
+    [items addObject:ACSwitch(AutoACT(@"Quảng cáo"), @"NoYTPremium", AutoACT(@"Chặn popup và thẻ mời Premium"), @"xmark.shield.fill",
         UIColor.systemRedColor, kHidePromosKey,
-        AutoACT(@"No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium, đồng thời gỡ khỏi bảng tin các thẻ mời dùng thử hoặc mua YouTube Music Premium (không để lại khoảng trống). Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app."),
+        AutoACT(@"NoYTPremium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium, đồng thời gỡ khỏi bảng tin các thẻ mời dùng thử hoặc mua YouTube Music Premium (không để lại khoảng trống). Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app."),
         TWEAK_UPSTREAM_NOYTPREMIUM_GATED ? restart : nil)];
     [items addObject:ACSwitch(AutoACT(@"Quảng cáo"), AutoACT(@"Ẩn nhãn trả phí"), AutoACT(@"Có quảng cáo trả phí"), @"tag.slash.fill",
         UIColor.systemOrangeColor, kHidePaidPromoKey,
@@ -10176,9 +10202,9 @@ static UIStackView *AutoACBuildInfoPage(NSArray<AutoACItem *> *items) {
     add(AutoACT(@"Tùy chỉnh YouTube\n"), [UIFont systemFontOfSize:13.5], UIColor.labelColor, tight);
 
     add(AutoACT(@"MÃ NGUỒN THAM KHẢO\n"), [UIFont systemFontOfSize:12 weight:UIFontWeightBold], UIColor.systemBlueColor, headPara);
-    NSString *src = @"YouTube X · NoYTPremium · SponsorBlock (sponsor.ajay.app)\n";
+    NSString *src = AutoACT(@"Ghi công\n• YouTube X, NoYTPremium, YTLite, ytkace (kể cả Sideloading.x, dựa trên IAmYouTube của PoomSmart), dữ liệu SponsorBlock (sponsor.ajay.app)\n");
     NSString *up = TWEAK_UPSTREAM_INFO;
-    if (TWEAK_UPSTREAM_COUNT > 0 && up.length > 0) src = [src stringByAppendingFormat:AutoACT(@"Đã tích hợp: %@\n"), up];
+    if (TWEAK_UPSTREAM_COUNT > 0 && up.length > 0) src = [src stringByAppendingFormat:AutoACT(@"• Đã tích hợp: %@\n"), up];
     add(src, [UIFont systemFontOfSize:13.5], UIColor.labelColor, tight);
 
     // CHỨC NĂNG CHÍNH: tiêu đề bấm để thu gọn / mở rộng (mặc định thu gọn), nội dung ở nhãn riêng
@@ -16027,6 +16053,9 @@ static NSDictionary<NSString *, NSString *> *AutoACEnglishTable(void) {
         @"Liên kết video": @"Video link",
         @"Liên kết, tiêu đề, mô tả": @"Link, title, description",
         @"Loại đoạn tự bỏ qua": @"Segment types to skip",
+        @"Tự bỏ qua, báo, loại đoạn": @"Auto skip, alerts, segment types",
+        @"Cài đặt SponsorBlock (dữ liệu từ sponsor.ajay.app): bật tự bỏ qua, báo khi bỏ qua và chọn các loại đoạn sẽ tự bỏ qua: tài trợ, tự quảng bá, nhắc tương tác, mở đầu, kết, xem trước, phần không phải nhạc, đoạn thừa.": @"SponsorBlock settings (data from sponsor.ajay.app): turn on auto skip, get an alert when a segment is skipped, and choose which segment types to skip: sponsor, self-promotion, interaction reminders, intro, outro, preview, non-music sections, filler.",
+        @"Ghi công\n• YouTube X, NoYTPremium, YTLite, ytkace (kể cả Sideloading.x, dựa trên IAmYouTube của PoomSmart), dữ liệu SponsorBlock (sponsor.ajay.app)\n": @"Credits\n• YouTube X, NoYTPremium, YTLite, ytkace (including Sideloading.x, based on IAmYouTube by PoomSmart), SponsorBlock data (sponsor.ajay.app)\n",
         @"Lưu": @"Save",
         @"Lưu sau khi tải": @"Save after download",
         @"Lưu thành tệp .txt": @"Save as .txt file",
@@ -16215,7 +16244,7 @@ static NSDictionary<NSString *, NSString *> *AutoACEnglishTable(void) {
         @"Đã sao chép mô tả": @"Description copied",
         @"Đã sao chép tiêu đề": @"Title copied",
         @"Đã thoát chế độ an toàn": @"Left safe mode",
-        @"Đã tích hợp: %@\n": @"Integrated: %@\n",
+        @"• Đã tích hợp: %@\n": @"• Integrated: %@\n",
         @"Đã tạm dừng": @"Paused",
         @"Đã tải xong": @"Download complete",
         @"Đã tắt hẹn giờ": @"Timer turned off",
@@ -16276,7 +16305,7 @@ static NSDictionary<NSString *, NSString *> *AutoACEnglishTable(void) {
         @"Ẩn nhãn trả phí": @"Hide paid-promotion label",
         @"Có quảng cáo trả phí": @"Includes paid promotion",
         @"Ẩn nhãn \"Có quảng cáo trả phí\" hiện trên trình phát khi video có nội dung được tài trợ. Chỉ ẩn nhãn, không chặn nội dung của video.": @"Hides the \"Includes paid promotion\" label shown on the player when a video has sponsored content. It only hides the label; it does not block the video's content.",
-        @"No premium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium, đồng thời gỡ khỏi bảng tin các thẻ mời dùng thử hoặc mua YouTube Music Premium (không để lại khoảng trống). Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app.": @"No premium: blocks the popups, suggestion bars and dialogs that invite you to try or buy YouTube Premium, and also removes cards inviting you to try or buy YouTube Music Premium from the feed (leaving no gap). When the build includes NoYTPremium, this switch also turns that part on and off (survey blocking, the trial entry in settings). Requires restarting the app.",
+        @"NoYTPremium: chặn các popup, thanh gợi ý và hộp thoại mời dùng thử hoặc mua YouTube Premium, đồng thời gỡ khỏi bảng tin các thẻ mời dùng thử hoặc mua YouTube Music Premium (không để lại khoảng trống). Khi bản build có NoYTPremium thì công tắc này bật tắt luôn cả phần đó (chặn khảo sát, mục dùng thử trong cài đặt). Cần mở lại app.": @"NoYTPremium: blocks the popups, suggestion bars and dialogs that invite you to try or buy YouTube Premium, and also removes cards inviting you to try or buy YouTube Music Premium from the feed (leaving no gap). When the build includes NoYTPremium, this switch also turns that part on and off (survey blocking, the trial entry in settings). Requires restarting the app.",
         @"Cạnh nút toàn màn hình": @"Next to the fullscreen button",
         @"Chạm lần nữa để khôi phục tab": @"Tap again to restore tabs",
         @"Đã khôi phục tab mặc định": @"Default tabs restored",
